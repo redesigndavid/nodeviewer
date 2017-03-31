@@ -1,0 +1,4 @@
+#!/usr/bin/env python2.7
+
+import node_viewer.test
+node_viewer.test.test()

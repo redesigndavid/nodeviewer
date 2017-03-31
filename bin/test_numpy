@@ -1,0 +1,48 @@
+#!/usr/bin/env python
+
+import numpy as np
+a = np.arange(8)
+a = a.reshape((4,2))
+d = np.zeros((a.shape[0], a.shape[0], a.shape[1]))
+for i in xrange(a.shape[1]):
+    d[:, :, i] = a[:, i, None] - a[:, i]
+di = np.sqrt((d**2).sum(axis=-1))
+di = np.where(di<0.01, 0.01, di)
+rep = np.transpose(np.transpose(d) / di).sum(axis=1)
+
+c = np.array([
+    [0,0,0,0],
+    [0,0,0,0],
+    [0,0,0,0],
+    [0,0,0,0]])
+cc = [
+    [0,1],
+    [1,2],
+    [2,0],
+    [1,3],
+    [2,3],
+]
+
+for ci in cc:
+    c[ci[0],ci[1]] = 1.0
+
+d[np.where(c==0)] = 0
+l = np.sqrt((d**2).sum(axis=-1))
+l = np.where(l<0.01, 0.01, l)
+attract = (np.transpose(d) * np.transpose(l)).transpose().sum(axis=1)
+print '*'*81
+print 'orig'
+print a
+print '*'*80
+print 'deltas'
+print d
+print '*'*80
+print 'distance'
+print di
+print '*'*80
+print 'displace'
+print rep
+print '*'*80
+print 'attract'
+print attract
+import pdb;pdb.set_trace();
