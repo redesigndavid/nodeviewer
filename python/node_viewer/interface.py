@@ -11,8 +11,8 @@ class Edge(QGraphicsLineItem):
 
     def paint(self, painter, *args, **kwargs):
         super(Edge, self).paint(painter, *args, **kwargs)
-        #middle = (self.line().p2() + self.line().p1()) / 2.0
-        #painter.drawText(middle, "%.02f" % self.line().length())
+        # middle = (self.line().p2() + self.line().p1()) / 2.0
+        # painter.drawText(middle, "%.02f" % self.line().length())
 
 
 class Node(QGraphicsItem):
@@ -24,6 +24,8 @@ class Node(QGraphicsItem):
         self._tooltip = tooltip
         self._colors = colors
         self._mode = 'default'
+        self._true_pos = None
+        self._tip = False
 
     def paint(self, painter, *args, **kwargs):
         color = self._colors.get(self._mode)
@@ -34,28 +36,6 @@ class Node(QGraphicsItem):
 
     def boundingRect(self):
         return QRectF(-5, -5, 10, 10)
-
-    def get_siblings(self):
-        sibs = [
-            item for (key, item) in self._node_view._nodes.items()
-            if key != self._name]
-        return sibs
-
-    def get_connected_siblings(self):
-        connections = []
-        for connection in self._node_view._nodedata['connections']:
-            if self._key not in connection:
-                continue
-            if self._key == connection[0]:
-                connection = self._node_view._nodes[connection[1]]
-            else:
-                connection = self._node_view._nodes[connection[0]]
-            connections.append(connection)
-        return connections
-
-
-def _length(d):
-    return (d.x() ** 2 + d.y() ** 2) ** 0.5
 
 
 class NodeViewer(QGraphicsView):
@@ -71,10 +51,6 @@ class NodeViewer(QGraphicsView):
         self.scene.addLine(0, 0, 0, 10)
         self.scene.addLine(0, 0, 10, 0)
 
-        #for i in range(1000):
-        #    print i
-        #    self.frame_update(i)
-
         # set time line animator
         self._timeline = QTimeLine(1000)
         self._timeline.setFrameRange(0, 99)
@@ -82,17 +58,22 @@ class NodeViewer(QGraphicsView):
         self._timeline.frameChanged.connect(self.frame_update)
         self._timeline.start()
 
+        self._iters = 10000
+
     def frame_update(self, frame):
 
-        _spring_damp = 0.125
-        _spring_length = 25
-        _repel_strength = 100.8
-        _extra_repel_length = 7.358
+        self._iters -= 20
+        self._iters = max(10, self._iters)
+
+        mult = float(self._iters) / 10000.0
+
+        _spring_damp = 0.055 * mult
+        _spring_length = 35
+        _repel_strength = 22.8 * mult
 
         nodes_num = len(self._nodes)
-        edges_num = len(self._edges)
-        sorted_keys = sorted(self._nodes.keys() + self._edges.keys())
-        n = np.zeros((nodes_num + edges_num, 2))
+        sorted_keys = sorted(self._nodes.keys())
+        n = np.zeros((nodes_num, 2))
         for idx, sorted_key in enumerate(sorted_keys):
             try:
                 node = self._nodes[sorted_key]
@@ -102,7 +83,7 @@ class NodeViewer(QGraphicsView):
                 p = (line.line().p2() + line.line().p1()) / 2.0
                 n[idx] = np.array((p.x(), p.y()))
 
-        c = np.zeros((nodes_num + edges_num, nodes_num + edges_num))
+        c = np.zeros((nodes_num, nodes_num))
         c.fill(np.nan)
         for connection in self._nodedata['connections']:
             idx = sorted_keys.index(connection[0])
@@ -110,57 +91,52 @@ class NodeViewer(QGraphicsView):
             c[idx, idy] = 1.0
         c[np.isnan(c)] = 0.0
 
-        delta = np.zeros((
+        siblings = []
+        for idx in range(c.shape[0]):
+            s = c[np.where(c[idx] == 1)].sum(axis=0)
+            s[idx] = 0
+            siblings.append(s)
+
+        # we want random rather than zeros
+        delta = np.random.random((
             n.shape[0], n.shape[0], n.shape[1]))
 
-        for i in range(10):
+        for i in range(3):
 
             for i in xrange(n.shape[1]):
                 # matrix of difference between points
                 delta[:, :, i] = n[:, i, None] - n[:, i]
 
             # distance betwen points
-            distance = np.sqrt((delta**2).sum(axis=-1)) + _extra_repel_length
+            distance = np.sqrt((delta**2).sum(axis=-1))
+            distance = np.where(distance < 0.0001, 0.0001, distance)
 
-            normal_direction = (np.transpose(delta) / distance)
-            direction = normal_direction * _repel_strength
-
-            # get displacement
-            repel_disp = np.transpose(
-                direction / (distance * distance)).sum(axis=1)
+            # repel displacement
+            repl_normal_direction = np.transpose(delta) / distance
+            repl_direction = (
+                    repl_normal_direction
+                    * _repel_strength
+                    / (distance**2))
+            repel_disp = np.transpose(repl_direction).sum(axis=1)
 
             # calculate attraction
             delta[np.where(c == 0.0)] = 0
             length = np.sqrt((delta**2).sum(axis=-1))
-            length = np.where(length < 0.01, 0.01, length)
+            length = np.where(length < 0.0001, 0.0001, length)
             stretch = np.transpose(length) - _spring_length
-            attract = (np.transpose(delta * -1)
-                       / np.transpose(length)
+            attract = (np.transpose(delta * -1) / np.transpose(length)
                        * stretch * _spring_damp).transpose().sum(axis=1)
 
-            positions = _rescale_layout(
-                repel_disp + attract + n, scale=300)
+            n = attract + repel_disp + n
 
         for idx, sorted_key in enumerate(sorted_keys):
             try:
                 node = self._nodes[sorted_key]
-                d = positions[idx]
+                d = n[idx]
                 p = QPointF(d[0], d[1])
                 node.setPos(p)
             except:
                 pass
-
-        node_len = len(self._nodes.keys())
-        av_x = sum([
-            nod.pos().x()
-            for nod in self._nodes.values()]) / float(node_len)
-        av_y = sum([
-            nod.pos().y()
-            for nod in self._nodes.values()]) / float(node_len)
-        mid = QPointF(av_x, av_y)
-
-        for node in self._nodes.values():
-            node.setPos(node.pos() - mid)
 
         # update lines
         for connection in self._nodedata['connections']:
@@ -170,6 +146,17 @@ class NodeViewer(QGraphicsView):
             line.setLine(QLineF(left.x(), left.y(),
                                 right.x(), right.y()))
 
+    def fit_in_view(self):
+        xs = [nod.pos().x() for nod in self._nodes.values()]
+        ys = [nod.pos().y() for nod in self._nodes.values()]
+        minx = min(xs)
+        miny = min(ys)
+        maxx = max(xs)
+        maxy = max(ys)
+        self.fitInView(
+                minx, miny, maxx - minx, maxy - miny,
+                Qt.KeepAspectRatio)
+
     def set_node_data(self, node_data):
 
         self._nodedata = node_data or {}
@@ -178,34 +165,39 @@ class NodeViewer(QGraphicsView):
         self._nodes = {}
         self._edges = {}
 
-        for idx, (node_key, data) in enumerate(self._nodedata['nodes'].items()):
+        for idx, (nkey, data) in enumerate(self._nodedata['nodes'].items()):
             node = Node(self,
-                        node_key,
+                        nkey,
                         data['name'],
                         data['tooltip'],
                         data['colors'])
             node.setPos(random.random() * 200, random.random() * 200)
-            self._nodes[node_key] = node
+            self._nodes[nkey] = node
 
+        total_connections = []
         for connection in self._nodedata['connections']:
             gline = Edge(0, 0, 0, 0)
             self.scene.addItem(gline)
             self._edges[connection] = gline
 
-        for node in self._nodes.values():
+            total_connections.extend(connection[:2])
+
+        for key, node in self._nodes.items():
             self.scene.addItem(node)
 
+            if total_connections.count(key) == 1:
+                node._tip = True
 
-def _rescale_layout(pos,scale=1):
+
+def _rescale_layout(pos, scale=1):
     # rescale to (0,pscale) in all axes
 
     # shift origin to (0,0)
-    lim=0 # max coordinate for all axes
+    lim = 0  # max coordinate for all axes
     for i in xrange(pos.shape[1]):
-        pos[:,i]-=pos[:,i].min()
-        lim=max(pos[:,i].max(),lim)
+        pos[:, i] -= pos[:, i].min()
+        lim = max(pos[:, i].max(), lim)
     # rescale to (0,scale) in all directions, preserves aspect
     for i in xrange(pos.shape[1]):
-        pos[:,i]*=scale/lim
+        pos[:, i] *= scale / lim
     return pos
-

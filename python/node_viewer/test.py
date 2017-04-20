@@ -110,8 +110,9 @@ def test():
     app = QApplication(sys.argv)
     #w = NodeViewer(node_data=_test_data)
     test_data = dict(_test_data)
-    for i in range(40):
-        import random
+    import random
+    random.seed(2000)
+    for i in range(140):
         key = str(random.random())
         connection = random.choice(test_data['nodes'].keys())
         test_data['nodes'][key] = {
