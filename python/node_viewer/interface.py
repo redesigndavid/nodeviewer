@@ -51,11 +51,35 @@ class Edge(QGraphicsLineItem):
             'modes', {}).get(self._mode, {}).get('line_width')
         pen = QPen(QColor(*color))
         pen.setWidth(pen_width)
-        pen.setStyle(Qt.DashLine)
+        pen.setStyle(Qt.SolidLine)
         painter.setPen(pen)
         path = QPainterPath(self.line().p1())
         path.lineTo(self.line().p2())
         painter.drawPath(path)
+
+        line = self.line()
+        angle = math.acos(line.dx() / line.length())
+        if line.dy() >= 0:
+            angle = (math.pi * 2.0) - angle
+
+        line_vec = (line.p2() - line.p1())
+        offset = (line_vec / line_vec.manhattanLength()) * 8
+        arrow_size = pen_width * 2
+        arrowP1 = line.p1() + offset + QPointF(
+            math.sin(angle + math.pi / 3.0) * arrow_size,
+            math.cos(angle + math.pi / 3.0) * arrow_size)
+
+        arrowP2 = line.p1() + offset + QPointF(
+            math.sin(angle + math.pi - math.pi / 3.0) * arrow_size,
+            math.cos(angle + math.pi - math.pi / 3.0) * arrow_size)
+
+        arrow_head = QPolygonF()
+        for point in [line.p1() + offset, arrowP1, arrowP2]:
+            arrow_head.append(point)
+        pen.setWidth(0.01)
+        painter.setPen(pen)
+        painter.setBrush(QColor(*color))
+        painter.drawPolygon(arrow_head)
 
 
 class Node(QGraphicsItem):
@@ -87,7 +111,7 @@ class Node(QGraphicsItem):
         pen.setWidth(pen_width)
         painter.setPen(pen)
         painter.setBrush(QColor(*fill_color))
-        painter.drawRect(QRectF(-5, -5, 10, 10))
+        painter.drawEllipse(QRectF(-5, -5, 10, 10))
 
     def boundingRect(self):
         factor = 2 * self._modes.get(
