@@ -79,7 +79,7 @@ def test():
     test_data = dict(_test_data)
     import random
 
-    for i in range(130):
+    for i in range(1130):
         key = rand_key()
         for _ in range(random.choice(range(1)) + 1):
             connection = random.choice(test_data['nodes'].keys())

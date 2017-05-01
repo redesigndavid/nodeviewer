@@ -295,6 +295,7 @@ def _get_dot_positions(nodes=None, connections=None):
     layout_type = 'dot'
     x_factor = 1
     y_factor = 1
+
     if layout_type == 'dot':
         x_factor = 0.1
         y_factor = 0.1
