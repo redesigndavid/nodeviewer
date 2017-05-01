@@ -1,132 +1,102 @@
 import sys
 from PyQt4.QtGui import QApplication
 from node_viewer import NodeViewer
+import random
+
+
+_default_node_modes = {
+    'normal': {
+        'fill': (0, 250, 0, 255),
+        'pen': (100, 10, 20, 255),
+        'line_width': 1.5,
+    },
+    'selected': {
+        'fill': (255, 225, 0, 255),
+        'pen': (200, 30, 50, 255),
+        'line_width': 1.5,
+
+    },
+    'click': {
+        'fill': (155, 200, 0, 255),
+        'pen': (200, 200, 220, 255),
+        'line_width': 1.5,
+    },
+    'hover': {
+        'fill': (155, 200, 0, 255),
+        'pen': (200, 80, 220, 255),
+        'line_width': 3.5,
+    },
+}
+
+_default_line_modes = {
+    'normal': {
+        'pen': (100, 10, 20, 255),
+        'line_width': 1.5
+    },
+    'selected': {
+        'pen': (120, 255, 255, 255),
+        'line_width': 1.5
+    },
+    'hover': {
+        'pen': (255, 255, 20, 255),
+        'line_width': 2.5
+    },
+}
+
+
+def rand_key():
+    letters = (
+        'ABCDEFGHIJKLMNOPQRSTUV'
+        'abcdefghijklmnopqrstuv'
+        '01234567890')
+    rtn = ''
+    for i in range(4):
+        rtn += random.choice(letters)
+    return rtn
+
 
 _test_data = {
     'nodes': {
-        'a': {'name': 'Asterisk *',
-              'colors': {'default': (0, 250, 0, 255),
-                         'line': (100, 10, 20, 255),
-                         'hover': (255, 125, 0, 255),
-                         'tooltip': (255, 125, 0, 255),
-                         'click': (200, 200, 0, 255)},
+        'defg': {'name': 'Asterisk *',
+              'modes': _default_node_modes,
               'tooltip': '*'},
-        'b': {'name': 'Bang !',
-              'colors': {'default': (255, 0, 0, 255),
-                         'line': (100, 10, 20, 255),
-                         'hover': (255, 125, 0, 255),
-                         'tooltip': (255, 125, 0, 255),
-                         'click': (200, 200, 0, 255)},
+        'bcde': {'name': 'Bang !',
+              'modes': _default_node_modes,
               'tooltip': '!'},
-        'c': {'name': 'Comma ,',
-              'colors': {'default': (255, 0, 255, 255),
-                         'line': (100, 10, 20, 255),
-                         'hover': (255, 125, 0, 255),
-                         'tooltip': (255, 125, 0, 255),
-                         'click': (200, 200, 0, 255)},
+        'abcd': {'name': 'Comma ,',
+              'modes': _default_node_modes,
               'tooltip': ','},
-        'a1': {'name': 'Asterisk *',
-               'colors': {'default': (0, 250, 0, 255),
-                          'line': (200, 10, 20, 255),
-                          'hover': (255, 125, 0, 255),
-                          'tooltip': (255, 125, 0, 255),
-                          'click': (200, 200, 0, 255)},
-               'tooltip': '*'},
-        'b1': {'name': 'Bang !',
-               'colors': {'default': (255, 0, 0, 255),
-                          'line': (200, 10, 20, 255),
-                          'hover': (255, 125, 0, 255),
-                          'tooltip': (255, 125, 0, 255),
-                          'click': (200, 200, 0, 255)},
-               'tooltip': '!'},
-        'c1': {'name': 'Comma ,',
-               'colors': {'default': (255, 0, 255, 255),
-                          'line': (200, 10, 20, 255),
-                          'hover': (255, 125, 0, 255),
-                          'tooltip': (255, 125, 0, 255),
-                          'click': (200, 200, 0, 255)},
-               'tooltip': ','},
-        'a2': {'name': 'Asterisk *',
-               'colors': {'default': (0, 250, 0, 255),
-                          'line': (200, 10, 20, 255),
-                          'hover': (255, 125, 0, 255),
-                          'tooltip': (255, 125, 0, 255),
-                          'click': (200, 200, 0, 255)},
-               'tooltip': '*'},
-        'b2': {'name': 'Bang !',
-               'colors': {'default': (255, 0, 0, 255),
-                          'line': (200, 10, 20, 255),
-                          'hover': (255, 125, 0, 255),
-                          'tooltip': (255, 125, 0, 255),
-                          'click': (200, 200, 0, 255)},
-               'tooltip': '!'},
-        'c2': {'name': 'Comma ,',
-               'colors': {'default': (255, 0, 255, 255),
-                          'line': (200, 10, 20, 255),
-                          'hover': (255, 125, 0, 255),
-                          'tooltip': (255, 125, 0, 255),
-                          'click': (200, 200, 0, 255)},
-               'tooltip': ','},
-        'a3': {'name': 'Asterisk *',
-               'colors': {'default': (0, 250, 0, 255),
-                          'line': (200, 10, 20, 255),
-                          'hover': (255, 125, 0, 255),
-                          'tooltip': (255, 125, 0, 255),
-                          'click': (200, 200, 0, 255)},
-               'tooltip': '*'},
-        'b3': {'name': 'Bang !',
-               'colors': {'default': (255, 0, 0, 255),
-                          'line': (200, 10, 20, 255),
-                          'hover': (255, 125, 0, 255),
-                          'tooltip': (255, 125, 0, 255),
-                          'click': (200, 200, 0, 255)},
-               'tooltip': '!'},
-        'c3': {'name': 'Comma ,',
-               'colors': {'default': (255, 0, 255, 255),
-                          'line': (200, 10, 20, 255),
-                          'hover': (255, 125, 0, 255),
-                          'tooltip': (255, 125, 0, 255),
-                          'click': (200, 200, 0, 255)},
-               'tooltip': ','},
     },
-    'connections': [
-        ('a', 'a1', ''),
-        ('b', 'b1', ''),
-        ('c', 'c1', ''),
-        ('a', 'a2', ''),
-        ('b', 'b2', ''),
-        ('c', 'c2', ''),
-        ('a2', 'a3', ''),
-        ('b2', 'b3', ''),
-        ('c2', 'c3', ''),
-        ('a', 'b', ''),
-        ('b', 'c', ''),
-        ('c', 'a', ''),
-    ]
+    'connections': {
+        ('defg', 'bcde'): {'modes': _default_line_modes, 'weight': 1},
+        ('bcde', 'abcd'): {'modes': _default_line_modes, 'weight': 1},
+        ('abcd', 'defg'): {'modes': _default_line_modes, 'weight': 1},
+    }
 }
 
 
 def test():
-    app = QApplication(sys.argv)
-    #w = NodeViewer(node_data=_test_data)
     test_data = dict(_test_data)
     import random
-    random.seed(2000)
-    for i in range(140):
-        key = str(random.random())
-        connection = random.choice(test_data['nodes'].keys())
-        test_data['nodes'][key] = {
-            'name': 'Comma ,',
-            'colors': {'default': (255 * random.random(), 255 * random.random(), 255 * random.random(), 255),
-                       'line': (200 * random.random(), 10 * random.random(), 20 * random.random(), 255),
-                       'hover': (255, 125, 0, 255),
-                       'tooltip': (255, 125, 0, 255),
-                       'click': (200, 200, 0, 255)},
-            'tooltip': ','}
-        test_data['connections'].append((key, connection, ''))
+
+    for i in range(130):
+        key = rand_key()
+        for _ in range(random.choice(range(1)) + 1):
+            connection = random.choice(test_data['nodes'].keys())
+            test_data['nodes'][key] = {
+                'name': 'Comma ,',
+                'modes': _default_node_modes,
+                'tooltip': ','}
+            test_data['connections'][(key, connection)] = {
+                'modes': _default_line_modes,
+                'weight': 30,
+            }
+
+    app = QApplication(sys.argv)
     w = NodeViewer(node_data=test_data)
     w.resize(450, 750)
     w.move(100, 100)
     w.setWindowTitle('Simple')
-    w.show()
+    w.showFullScreen()
+    w.raise_()
     sys.exit(app.exec_())
