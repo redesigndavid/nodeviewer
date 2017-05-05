@@ -10,6 +10,101 @@ import pydot
 _layers = {'edges': 1,
            'nodes': 2}
 
+class ArrowLine(QGraphicsPathItem):
+    def __init__(self, node_view, connection_key, conn_data, *args, **kwargs):
+        super(QGraphicsPathItem, self).__init__(*args, **kwargs)
+        self._node_view = node_view
+        self._key = connection_key
+        self._connection_data = conn_data
+
+        self.setZValue(_layers.get('edges'))
+        self.setAcceptsHoverEvents(True)
+        # self.setCacheMode(QGraphicsItem.DeviceCoordinateCache)
+        self.setZValue(_layers.get('nodes'))
+        self.setFlag(QGraphicsItem.ItemIsSelectable)
+
+        pen = QPen(QColor(*[255, 255, 255, 255]))
+        pen.setWidth(10)
+        self.setPen(pen)
+
+        self._mode = 'normal'
+        self.p1 = QPointF(0, 0)
+        self.p2 = QPointF(0, 0)
+        self.bez_p1 = QPointF(0, 0)
+        self.bez_p2 = QPointF(0, 0)
+
+    def set_p1(self, p):
+        self.p1 = QPointF(*p)
+
+    def set_bp1(self, p):
+        self.bez_p1 = QPointF(*p)
+
+    def set_p2(self, p):
+        self.p2 = QPointF(*p)
+
+    def set_bp2(self, p):
+        self.bez_p2 = QPointF(*p)
+
+    def set_points(self):
+        pen_width = self._connection_data.get(
+            'modes', {}).get(self._mode, {}).get('line_width')
+
+        self.distance = math.hypot(self.p1.x() - self.p2.x(),
+                                   self.p1.y() - self.p2.y())
+        quarter = (self.distance / -3)
+
+        s_line = QLineF(self.p1, (self.bez_p1 * quarter) + self.p1)
+        angle = math.acos(s_line.dx() / s_line.length())
+        if s_line.dy() >= 0:
+            angle = (math.pi * 2.0) - angle
+
+        s_line_vec = (s_line.p2() - s_line.p1())
+        s_line_length = math.hypot(s_line_vec.x(), s_line_vec.y())
+        offset = (s_line_vec / s_line_length) * 6
+        arrow_size = pen_width * 2
+        c_offset = (s_line_vec / s_line_length) * (6 + pen_width)
+        arrowP1 = s_line.p1() + offset + QPointF(
+            math.sin(angle + math.pi / 3.0) * arrow_size,
+            math.cos(angle + math.pi / 3.0) * arrow_size)
+
+        arrowP2 = s_line.p1() + offset + QPointF(
+            math.sin(angle + math.pi - math.pi / 3.0) * arrow_size,
+            math.cos(angle + math.pi - math.pi / 3.0) * arrow_size)
+
+        self.curve_line = QPainterPath(self.p1 + c_offset)
+        self.curve_line.cubicTo(
+            (self.bez_p1 * quarter) + self.p1,
+            (self.bez_p2 * quarter) + self.p2,
+            self.p2)
+
+        self.arrow_head = QPolygonF()
+        for point in [s_line.p1() + offset, arrowP1, arrowP2]:
+            self.arrow_head.append(point)
+
+    def paint(self, painter, *args, **kwargs):
+        color = self._connection_data.get(
+            'modes', {}).get(self._mode, {}).get('pen')
+        pen_width = self._connection_data.get(
+            'modes', {}).get(self._mode, {}).get('line_width')
+        pen = QPen(QColor(*color))
+        pen.setWidth(pen_width)
+        pen.setStyle(Qt.SolidLine)
+        painter.setPen(pen)
+        painter.drawPath(self.curve_line)
+        painter.setPen(pen)
+        painter.setBrush(QColor(*color))
+        painter.drawPolygon(self.arrow_head)
+
+    def shape(self):
+        s = QPainterPath()
+        s.addRect(self.curve_line.boundingRect())
+        return s
+
+    def boundingRect(self):
+        return self.curve_line.boundingRect()
+
+
+
 
 class Edge(QGraphicsLineItem):
 
@@ -27,6 +122,9 @@ class Edge(QGraphicsLineItem):
         self.setZValue(_layers.get('nodes'))
         self.setFlag(QGraphicsItem.ItemIsSelectable)
         self._mode = 'normal'
+
+        self.bez_p1 = [0, 0]
+        self.bez_p2 = [0, 0]
 
     def mousePressEvent(self, event):
         self._mode = 'selected'
@@ -53,18 +151,22 @@ class Edge(QGraphicsLineItem):
         pen.setWidth(pen_width)
         pen.setStyle(Qt.SolidLine)
         painter.setPen(pen)
-        path = QPainterPath(self.line().p1())
-        path.lineTo(self.line().p2())
-        painter.drawPath(path)
-
+        #path = QPainterPath(self.line().p1())
+        #path.lineTo(self.line().p2())
+        #painter.drawPath(path)
         line = self.line()
+        quarter = (line.length() / -3)
+
+        line = QLineF(self.line().p1(), (QPointF(*self.bez_p1) * quarter) + self.line().p1())
         angle = math.acos(line.dx() / line.length())
         if line.dy() >= 0:
             angle = (math.pi * 2.0) - angle
 
         line_vec = (line.p2() - line.p1())
-        offset = (line_vec / line_vec.manhattanLength()) * 8
+        line_length = math.hypot(line_vec.x(), line_vec.y())
+        offset = (line_vec / line_length) * 6
         arrow_size = pen_width * 2
+        coffset = (line_vec / line_length) * (6 + pen_width)
         arrowP1 = line.p1() + offset + QPointF(
             math.sin(angle + math.pi / 3.0) * arrow_size,
             math.cos(angle + math.pi / 3.0) * arrow_size)
@@ -72,6 +174,13 @@ class Edge(QGraphicsLineItem):
         arrowP2 = line.p1() + offset + QPointF(
             math.sin(angle + math.pi - math.pi / 3.0) * arrow_size,
             math.cos(angle + math.pi - math.pi / 3.0) * arrow_size)
+
+        cline = QPainterPath(self.line().p1() + coffset)
+        cline.cubicTo(
+            (QPointF(*self.bez_p1) * quarter) + self.line().p1(),
+            (QPointF(*self.bez_p2) * quarter) + self.line().p2(),
+            self.line().p2())
+        painter.drawPath(cline)
 
         arrow_head = QPolygonF()
         for point in [line.p1() + offset, arrowP1, arrowP2]:
@@ -114,7 +223,7 @@ class Node(QGraphicsItem):
         painter.drawEllipse(QRectF(-5, -5, 10, 10))
 
     def boundingRect(self):
-        factor = 2 * self._modes.get(
+        factor = 8 * self._modes.get(
             self._mode, self._modes.get('normal')).get('line_width')
         return QRectF(-5 - factor, -5 - factor, 10 + (2 * factor), 10 + (2*factor))
 
@@ -181,6 +290,7 @@ class NodeViewer(QGraphicsView):
             QGraphicsView.mousePressEvent(self, fake)
         else:
             QGraphicsView.mousePressEvent(self, event)
+            self.setDragMode(QGraphicsView.RubberBandDrag)
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.MiddleButton:
@@ -253,11 +363,11 @@ class NodeViewer(QGraphicsView):
 
         total_connections = []
         for connection, conn_data in self._nodedata['connections'].items():
-            self._node_edges.setdefault(connection[0], []).append(connection[:])
-            self._node_edges.setdefault(connection[1], []).append(connection[:])
+            self._node_edges.setdefault(connection[0], []).append(connection)
+            self._node_edges.setdefault(connection[1], []).append(connection)
             self._outgoing.setdefault(connection[0], []).append(connection[1])
             self._ingoing.setdefault(connection[1], []).append(connection[0])
-            gline = Edge(self, connection, conn_data)
+            gline = ArrowLine(self, connection, conn_data)
             self.scene.addItem(gline)
             self._edges[connection] = gline
             total_connections.extend(connection[:2])
@@ -286,8 +396,49 @@ class NodeViewer(QGraphicsView):
             left = self._nodes[connection[0]].pos()
             right = self._nodes[connection[1]].pos()
             line = self._edges[connection]
-            line.setLine(QLineF(left.x(), left.y(),
-                                right.x(), right.y()))
+            line.set_p1([left.x(), left.y()])
+            line.set_p2([right.x(), right.y()])
+        for idx, (nkey, data) in enumerate(self._nodedata['nodes'].items()):
+
+            normals = {}
+
+            for edge in self._node_edges[nkey]:
+                if edge[0] == nkey:
+                    offset = self._nodes[edge[0]].pos() - self._nodes[edge[1]].pos()
+                else:
+                    offset = self._nodes[edge[1]].pos() - self._nodes[edge[0]].pos()
+                offset_length = math.hypot(offset.x(), offset.y())
+                normal = offset / offset_length
+                normals[edge] = [normal.x(), normal.y()]
+
+            org_norms = dict(normals)
+            for i in range(4):
+                for edge, normal in normals.items():
+                    other_norms = [
+                        other_norm for other_key, other_norm in normals.items()
+                        if other_norm != edge]
+                    if not other_norms:
+                        continue
+                    oxs = sum([other_norm[0] for other_norm in other_norms])
+                    oys = sum([other_norm[1] for other_norm in other_norms])
+                    temp_vec = [org_norms[edge][0] - ((oxs / len(other_norms))*1.10),
+                                org_norms[edge][1] - ((oys / len(other_norms))*1.10)]
+                    temp_vec_length = math.hypot(temp_vec[0], temp_vec[1])
+                    if not temp_vec_length:
+                        continue
+                    normals[edge] = [temp_vec[0] / temp_vec_length,
+                                     temp_vec[1] / temp_vec_length]
+            for edge, normal in normals.items():
+                if edge[0] == nkey:
+                    self._edges[edge].set_bp1(normal)
+                else:
+                    self._edges[edge].set_bp2(normal)
+
+        for connection in connections or self._nodedata['connections']:
+            left = self._nodes[connection[0]].pos()
+            right = self._nodes[connection[1]].pos()
+            line = self._edges[connection]
+            line.set_points()
             line.update()
 
 

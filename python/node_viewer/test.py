@@ -7,7 +7,7 @@ import random
 _default_node_modes = {
     'normal': {
         'fill': (0, 250, 0, 255),
-        'pen': (100, 10, 20, 255),
+        'pen': (0, 250, 0, 255),
         'line_width': 1.5,
     },
     'selected': {
@@ -24,13 +24,13 @@ _default_node_modes = {
     'hover': {
         'fill': (155, 200, 0, 255),
         'pen': (200, 80, 220, 255),
-        'line_width': 3.5,
+        'line_width': 1.8,
     },
 }
 
 _default_line_modes = {
     'normal': {
-        'pen': (100, 10, 20, 255),
+        'pen': (0, 255, 0, 255),
         'line_width': 1.5
     },
     'selected': {
@@ -79,16 +79,25 @@ def test():
     test_data = dict(_test_data)
     import random
 
-    for i in range(1130):
+    for i in range(130):
         key = rand_key()
         for _ in range(random.choice(range(1)) + 1):
             connection = random.choice(test_data['nodes'].keys())
+            if connection == key:
+                continue
+            import copy
+            node_mode = copy.deepcopy(_default_node_modes)
+            edge_mode = copy.deepcopy(_default_line_modes)
+            color = [random.random() * 55, random.random() * 255, random.random() * 50, 255]
+            node_mode['normal']['fill'] = color
+            node_mode['normal']['pen'] = color
+            edge_mode['normal']['pen'] = color
             test_data['nodes'][key] = {
                 'name': 'Comma ,',
-                'modes': _default_node_modes,
+                'modes': node_mode,
                 'tooltip': ','}
             test_data['connections'][(key, connection)] = {
-                'modes': _default_line_modes,
+                'modes': edge_mode,
                 'weight': 30,
             }
 
