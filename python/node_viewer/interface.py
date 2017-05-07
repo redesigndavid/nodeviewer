@@ -2,58 +2,47 @@
 from PyQt4.QtGui import *
 from PyQt4.QtCore import *
 import math
-import json
-import numpy as np
-
-import pydot
+import dag
 
 _layers = {'edges': 1,
            'nodes': 2}
 
+
 class ArrowLine(QGraphicsPathItem):
-    def __init__(self, node_view, connection_key, conn_data, *args, **kwargs):
+    def __init__(self, node_view, edge, *args, **kwargs):
         super(QGraphicsPathItem, self).__init__(*args, **kwargs)
+        self._dag_edge = edge
         self._node_view = node_view
-        self._key = connection_key
-        self._connection_data = conn_data
+        self._connection_data = edge._edge_data
+        edge.set_ui(self)
 
         self.setZValue(_layers.get('edges'))
         self.setAcceptsHoverEvents(True)
-        # self.setCacheMode(QGraphicsItem.DeviceCoordinateCache)
-        self.setZValue(_layers.get('nodes'))
+        self.setCacheMode(QGraphicsItem.NoCache)
         self.setFlag(QGraphicsItem.ItemIsSelectable)
-
-        pen = QPen(QColor(*[255, 255, 255, 255]))
-        pen.setWidth(10)
-        self.setPen(pen)
-
         self._mode = 'normal'
-        self.p1 = QPointF(0, 0)
-        self.p2 = QPointF(0, 0)
-        self.bez_p1 = QPointF(0, 0)
-        self.bez_p2 = QPointF(0, 0)
 
-    def set_p1(self, p):
-        self.p1 = QPointF(*p)
+        self._points = {}
 
-    def set_bp1(self, p):
-        self.bez_p1 = QPointF(*p)
+    def set_p(self, idx, p):
+        self._points[idx] = QPointF(*p)
 
-    def set_p2(self, p):
-        self.p2 = QPointF(*p)
+    def make_shape(self):
+        if len(self._points) < 4:
+            return
+        p1 = self._points[0]
+        bez_p1 = self._points[1]
+        bez_p2 = self._points[2]
+        p2 = self._points[3]
 
-    def set_bp2(self, p):
-        self.bez_p2 = QPointF(*p)
-
-    def set_points(self):
         pen_width = self._connection_data.get(
-            'modes', {}).get(self._mode, {}).get('line_width')
+            'modes', {}).get(self._mode, {}).get('line_width', 1.5)
 
-        self.distance = math.hypot(self.p1.x() - self.p2.x(),
-                                   self.p1.y() - self.p2.y())
+        self.distance = math.hypot(p1.x() - p2.x(),
+                                   p1.y() - p2.y())
         quarter = (self.distance / -3)
 
-        s_line = QLineF(self.p1, (self.bez_p1 * quarter) + self.p1)
+        s_line = QLineF(p1, (bez_p1 * quarter) + p1)
         angle = math.acos(s_line.dx() / s_line.length())
         if s_line.dy() >= 0:
             angle = (math.pi * 2.0) - angle
@@ -71,65 +60,40 @@ class ArrowLine(QGraphicsPathItem):
             math.sin(angle + math.pi - math.pi / 3.0) * arrow_size,
             math.cos(angle + math.pi - math.pi / 3.0) * arrow_size)
 
-        self.curve_line = QPainterPath(self.p1 + c_offset)
+        self.curve_line = QPainterPath(p1 + c_offset)
         self.curve_line.cubicTo(
-            (self.bez_p1 * quarter) + self.p1,
-            (self.bez_p2 * quarter) + self.p2,
-            self.p2)
+            (bez_p1 * quarter) + p1,
+            (bez_p2 * quarter) + p2,
+            p2)
 
         self.arrow_head = QPolygonF()
         for point in [s_line.p1() + offset, arrowP1, arrowP2]:
             self.arrow_head.append(point)
 
+        stroker = QPainterPathStroker()
+        stroker.setWidth(5)
+        curve_stroke = QPainterPath(self.curve_line)
+        curve_stroke.addPolygon(self.arrow_head)
+        stroke_path = stroker.createStroke(self.curve_line)
+        self.setPath(stroke_path)
+
     def paint(self, painter, *args, **kwargs):
+        if len(self._points) < 4:
+            return
         color = self._connection_data.get(
             'modes', {}).get(self._mode, {}).get('pen')
         pen_width = self._connection_data.get(
-            'modes', {}).get(self._mode, {}).get('line_width')
+            'modes', {}).get(self._mode, {}).get('line_width', 1.5)
         pen = QPen(QColor(*color))
         pen.setWidth(pen_width)
         pen.setStyle(Qt.SolidLine)
+        pen.setJoinStyle(Qt.MiterJoin)
         painter.setPen(pen)
         painter.drawPath(self.curve_line)
+        pen.setStyle(Qt.NoPen)
         painter.setPen(pen)
         painter.setBrush(QColor(*color))
         painter.drawPolygon(self.arrow_head)
-
-    def shape(self):
-        s = QPainterPath()
-        s.addRect(self.curve_line.boundingRect())
-        return s
-
-    def boundingRect(self):
-        return self.curve_line.boundingRect()
-
-
-
-
-class Edge(QGraphicsLineItem):
-
-    def __init__(self, node_view, connection_key, conn_data, *args, **kwargs):
-        self._node_view = node_view
-        self._key = connection_key
-        self._connection_data = conn_data
-        super(Edge, self).__init__(0, 0, 0, 0, *args, **kwargs)
-        self.setZValue(_layers.get('edges'))
-        pen = QPen(QColor(*[255, 255, 255, 255]))
-        pen.setWidth(10)
-        self.setPen(pen)
-        self.setAcceptsHoverEvents(True)
-        self.setCacheMode(QGraphicsItem.DeviceCoordinateCache)
-        self.setZValue(_layers.get('nodes'))
-        self.setFlag(QGraphicsItem.ItemIsSelectable)
-        self._mode = 'normal'
-
-        self.bez_p1 = [0, 0]
-        self.bez_p2 = [0, 0]
-
-    def mousePressEvent(self, event):
-        self._mode = 'selected'
-        QGraphicsItem.mousePressEvent(self, event)
-        self.update()
 
     def hoverMoveEvent(self, event):
         self._mode = 'hover'
@@ -142,63 +106,15 @@ class Edge(QGraphicsLineItem):
             self._mode = 'selected'
         self.update()
 
-    def paint(self, painter, *args, **kwargs):
-        color = self._connection_data.get(
-            'modes', {}).get(self._mode, {}).get('pen')
-        pen_width = self._connection_data.get(
-            'modes', {}).get(self._mode, {}).get('line_width')
-        pen = QPen(QColor(*color))
-        pen.setWidth(pen_width)
-        pen.setStyle(Qt.SolidLine)
-        painter.setPen(pen)
-        #path = QPainterPath(self.line().p1())
-        #path.lineTo(self.line().p2())
-        #painter.drawPath(path)
-        line = self.line()
-        quarter = (line.length() / -3)
-
-        line = QLineF(self.line().p1(), (QPointF(*self.bez_p1) * quarter) + self.line().p1())
-        angle = math.acos(line.dx() / line.length())
-        if line.dy() >= 0:
-            angle = (math.pi * 2.0) - angle
-
-        line_vec = (line.p2() - line.p1())
-        line_length = math.hypot(line_vec.x(), line_vec.y())
-        offset = (line_vec / line_length) * 6
-        arrow_size = pen_width * 2
-        coffset = (line_vec / line_length) * (6 + pen_width)
-        arrowP1 = line.p1() + offset + QPointF(
-            math.sin(angle + math.pi / 3.0) * arrow_size,
-            math.cos(angle + math.pi / 3.0) * arrow_size)
-
-        arrowP2 = line.p1() + offset + QPointF(
-            math.sin(angle + math.pi - math.pi / 3.0) * arrow_size,
-            math.cos(angle + math.pi - math.pi / 3.0) * arrow_size)
-
-        cline = QPainterPath(self.line().p1() + coffset)
-        cline.cubicTo(
-            (QPointF(*self.bez_p1) * quarter) + self.line().p1(),
-            (QPointF(*self.bez_p2) * quarter) + self.line().p2(),
-            self.line().p2())
-        painter.drawPath(cline)
-
-        arrow_head = QPolygonF()
-        for point in [line.p1() + offset, arrowP1, arrowP2]:
-            arrow_head.append(point)
-        pen.setWidth(0.01)
-        painter.setPen(pen)
-        painter.setBrush(QColor(*color))
-        painter.drawPolygon(arrow_head)
-
 
 class Node(QGraphicsItem):
-    def __init__(self, node_view, key, name, tooltip, modes, *args, **kwargs):
+    def __init__(self, node_view, node, *args, **kwargs):
         super(Node, self).__init__(*args, **kwargs)
         self._node_view = node_view
-        self._key = key
-        self._name = name
-        self._tooltip = tooltip
-        self._modes = modes
+        self._dag_node = node
+        self._dag_node.set_ui(self)
+        self._key = node.conn_key()
+        self._modes = node._node_data.get('modes')
         self._mode = 'default'
         self._true_pos = None
         self._tip = False
@@ -223,7 +139,7 @@ class Node(QGraphicsItem):
         painter.drawEllipse(QRectF(-5, -5, 10, 10))
 
     def boundingRect(self):
-        factor = 8 * self._modes.get(
+        factor = 0.5 * self._modes.get(
             self._mode, self._modes.get('normal')).get('line_width')
         return QRectF(-5 - factor, -5 - factor, 10 + (2 * factor), 10 + (2*factor))
 
@@ -248,19 +164,19 @@ class Node(QGraphicsItem):
         QGraphicsItem.mouseMoveEvent(self, event)
         self.update()
         pos = [self.pos().x(), self.pos().y()]
-        self._node_view._nodedata['nodes'][self._key]['pos'] = pos
+        self._dag_node.set_pos(pos)
         self._node_view.update_lines()
 
     def mouseReleaseEvent(self, event):
         QGraphicsItem.mouseReleaseEvent(self, event)
         self.update()
         pos = [self.pos().x(), self.pos().y()]
-        self._node_view._nodedata['nodes'][self._key]['pos'] = pos
+        self._dag_node.set_pos(pos)
         self._node_view.update_lines()
 
 
 class NodeViewer(QGraphicsView):
-    def __init__(self, node_data=None, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super(NodeViewer, self).__init__(*args, **kwargs)
         self._nodedata = None
         self.scene = QGraphicsScene(self)
@@ -273,8 +189,6 @@ class NodeViewer(QGraphicsView):
         self.setDragMode(QGraphicsView.RubberBandDrag)
 
         self.factor = 1.0
-        self.set_node_data(node_data)
-
         self.scene.addLine(0, 0, 0, 10)
         self.scene.addLine(0, 0, 10, 0)
 
@@ -308,7 +222,6 @@ class NodeViewer(QGraphicsView):
         selected_items = self.scene.selectedItems()
         for item in self._nodes.values() + self._edges.values():
             if item in selected_items:
-                print str(item._key)
                 item._mode = 'selected'
             else:
                 item._mode = 'normal'
@@ -338,9 +251,10 @@ class NodeViewer(QGraphicsView):
             minx, miny, maxx - minx, maxy - miny,
             Qt.KeepAspectRatio)
 
-    def set_node_data(self, node_data):
+    def set_node_data(self, graph):
+        self._graph = graph
 
-        self._nodedata = node_data or {}
+        self._nodedata = {}
 
         # store nodes and edges qt graphic items
         self._nodes = {}
@@ -349,97 +263,105 @@ class NodeViewer(QGraphicsView):
         self._outgoing = {}
         self._ingoing = {}
 
-        self._update_connection_data()
-
-        for idx, (nkey, data) in enumerate(self._nodedata['nodes'].items()):
-            node = Node(self,
-                        nkey,
-                        data['name'],
-                        data['tooltip'],
-                        data['modes'])
-            pos = data.get('pos', [0, 0])
-            node.setPos(pos[0], pos[1])
+        for nkey, data in self._graph.iter_nodes():
+            node = Node(self, data)
+            node.setPos(*[10 * x for x in data.get_pos()])
+            self.scene.addItem(node)
             self._nodes[nkey] = node
 
-        total_connections = []
+        for edge_key, edge in self._graph.iter_edges():
+            gline = ArrowLine(self, edge)
+            self.scene.addItem(gline)
+
+        """
         for connection, conn_data in self._nodedata['connections'].items():
+
             self._node_edges.setdefault(connection[0], []).append(connection)
             self._node_edges.setdefault(connection[1], []).append(connection)
             self._outgoing.setdefault(connection[0], []).append(connection[1])
             self._ingoing.setdefault(connection[1], []).append(connection[0])
+
             gline = ArrowLine(self, connection, conn_data)
             self.scene.addItem(gline)
             self._edges[connection] = gline
-            total_connections.extend(connection[:2])
+        """
 
-        for key, node in self._nodes.items():
-            self.scene.addItem(node)
-            if total_connections.count(key) == 1:
-                node._tip = True
+        # self.update_nodes()
         self.update_lines()
-        self.fit_in_view()
+        # self.fit_in_view()
 
-    def _update_connection_data(self):
+    def update_nodes(self):
 
-        for idx, (nkey, data) in enumerate(self._nodedata['nodes'].items()):
-            if nkey not in self._nodes:
-                continue
+        # calculate nodes from graphviz
         self._nodedata = _get_dot_positions(**self._nodedata)
 
-        for idx, (nkey, data) in enumerate(self._nodedata['nodes'].items()):
+        for nkey, data in self._nodedata['nodes'].items():
             if nkey not in self._nodes:
+                # bad node
                 continue
             self._nodes[nkey].setPos(*data['pos'])
 
     def update_lines(self, connections=None, temp=False):
-        for connection in connections or self._nodedata['connections']:
-            left = self._nodes[connection[0]].pos()
-            right = self._nodes[connection[1]].pos()
-            line = self._edges[connection]
-            line.set_p1([left.x(), left.y()])
-            line.set_p2([right.x(), right.y()])
-        for idx, (nkey, data) in enumerate(self._nodedata['nodes'].items()):
+        for nkey, node in self._graph.iter_nodes():
 
+            # gather node's edge's normals
             normals = {}
-
-            for edge in self._node_edges[nkey]:
-                if edge[0] == nkey:
-                    offset = self._nodes[edge[0]].pos() - self._nodes[edge[1]].pos()
-                else:
-                    offset = self._nodes[edge[1]].pos() - self._nodes[edge[0]].pos()
+            for edge in node.iter_edges():
+                is_forwards = (edge._src.conn_key() == ('node_%s' % nkey))
+                offset = (edge._src.ui().pos() - edge._dst.ui().pos())
+                if not is_forwards:
+                    offset *= -1
                 offset_length = math.hypot(offset.x(), offset.y())
                 normal = offset / offset_length
-                normals[edge] = [normal.x(), normal.y()]
+                normals[edge.key()] = [normal.x(), normal.y()]
 
-            org_norms = dict(normals)
-            for i in range(4):
-                for edge, normal in normals.items():
-                    other_norms = [
-                        other_norm for other_key, other_norm in normals.items()
-                        if other_norm != edge]
-                    if not other_norms:
-                        continue
-                    oxs = sum([other_norm[0] for other_norm in other_norms])
-                    oys = sum([other_norm[1] for other_norm in other_norms])
-                    temp_vec = [org_norms[edge][0] - ((oxs / len(other_norms))*1.10),
-                                org_norms[edge][1] - ((oys / len(other_norms))*1.10)]
-                    temp_vec_length = math.hypot(temp_vec[0], temp_vec[1])
-                    if not temp_vec_length:
-                        continue
-                    normals[edge] = [temp_vec[0] / temp_vec_length,
-                                     temp_vec[1] / temp_vec_length]
-            for edge, normal in normals.items():
-                if edge[0] == nkey:
-                    self._edges[edge].set_bp1(normal)
+            # seperate the normals from each other
+            normals = seperate_normals(normals)
+
+            # assign the bezier points based on the seperated normals
+            for edge_key, normal in normals.items():
+                edge = self._graph.get_edge(edge_key)
+                line = edge.ui()
+                if edge._dst.conn_key() == ('node_%s' % nkey):
+                    node = edge._dst.ui()
+                    line.set_p(0, [node.x(), node.y()])
+                    line.set_p(1, normal)
                 else:
-                    self._edges[edge].set_bp2(normal)
+                    node = edge._src.ui()
+                    line.set_p(3, [node.x(), node.y()])
+                    line.set_p(2, normal)
 
-        for connection in connections or self._nodedata['connections']:
-            left = self._nodes[connection[0]].pos()
-            right = self._nodes[connection[1]].pos()
-            line = self._edges[connection]
-            line.set_points()
-            line.update()
+        # update edge shapes
+        for edge_key, edge in self._graph.iter_edges():
+            line = edge.ui()
+            try:
+                line.make_shape()
+                line.update()
+            except:
+                print 'bad'
+
+
+def seperate_normals(normals):
+    org_norms = dict(normals)
+
+    for _ in range(4):
+        for edge, normal in normals.items():
+            other_norms = [
+                other_norm for other_key, other_norm in normals.items()
+                if other_norm != edge]
+            if not other_norms:
+                continue
+            oxs = sum([other_norm[0] for other_norm in other_norms])
+            oys = sum([other_norm[1] for other_norm in other_norms])
+            temp_vec = [org_norms[edge][0] - ((oxs / len(other_norms))*1.10),
+                        org_norms[edge][1] - ((oys / len(other_norms))*1.10)]
+            temp_vec_length = math.hypot(temp_vec[0], temp_vec[1])
+            if not temp_vec_length:
+                continue
+            normals[edge] = [temp_vec[0] / temp_vec_length,
+                             temp_vec[1] / temp_vec_length]
+        org_norms.update(normals)
+    return org_norms
 
 
 def _get_dot_positions(nodes=None, connections=None):
@@ -448,33 +370,26 @@ def _get_dot_positions(nodes=None, connections=None):
     y_factor = 1
 
     if layout_type == 'dot':
-        x_factor = 0.1
-        y_factor = 0.1
+        x_factor = 10
+        y_factor = 10
 
-    graph = pydot.Dot(graph_type='digraph')
-    graph.set_overlap('splines')
-    for conn, conn_data in connections.items():
-        weight = conn_data.get('weight', 0.0)
-        edge = pydot.Edge(*conn)
-        edge.set_weight(weight)
-        graph.add_edge(edge)
+    graph = dag.DiGraph()
 
     for node_key, node_data in nodes.items():
-        node = pydot.Node(node_key)
-        node.set_width(3)
-        node.set_height(3)
-        if "pos" in node_data:
-            pos = [
-                node_data['pos'][0] / x_factor,
-                node_data['pos'][1] / y_factor]
-            node.set_pos(",".join(str(dim) for dim in pos))
+        node = dag.Node(node_key)
         graph.add_node(node)
 
-    json_graph = json.loads(graph.create('dot', 'json'))
+    for conn, conn_data in connections.items():
+        edge = dag.Edge(
+            graph.get_node(conn[0]),
+            graph.get_node(conn[1]))
+        graph.add_edge(edge)
 
-    for node in json_graph['objects']:
-        nodes[node['name']]['pos'] = [
-            float(node['_ldraw_'][2]['pt'][0]) * x_factor,
-            float(node['_ldraw_'][2]['pt'][1]) * y_factor]
+    graph.process_dot()
+
+    for node_key, node_data in graph.iter_nodes():
+        node_data = node_data.get_pos()
+        nodes[node_key]['pos'] = [float(node_data[0]) * x_factor,
+                                  float(node_data[1]) * y_factor]
 
     return dict(nodes=nodes, connections=connections)
