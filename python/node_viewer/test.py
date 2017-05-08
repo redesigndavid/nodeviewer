@@ -133,7 +133,7 @@ def test():
             nm += random.choice('abcdefghijklmnopqrstuvwxyz')
         return nm
 
-    for i in range(100):
+    for i in range(30):
         node_mode = {'normal': {}, 'selected': {}, 'hover': {}}
         color = [random.random() * 55, random.random() * 255, random.random() * 50, 255]
         node_mode['normal']['fill'] = color
@@ -162,18 +162,29 @@ def test():
             e = dag.Edge(node, conn, edge_data={'modes': edge_mode})
             digraph.add_edge(e)
 
-    #b = dag.Box('sample_box', (50, 800),
-    #        {'n': 3, 's': 2, 'w': 4, 'e': 5},
-    #        random.choice(clus),
-    #        box_data={'modes': node_mode})
-    #digraph.add_box(b)
+    node_mode = {'normal': {}, 'selected': {}, 'hover': {}}
+    color = [random.random() * 255, random.random() * 55, random.random() * 50, 255]
+    node_mode['normal']['fill'] = color
+    node_mode['normal']['line_width'] = 1.5
+    node_mode['normal']['pen'] = color
+    node_mode['selected']['pen'] = [155, 155, 155, 255]
+    node_mode['selected']['line_width'] = 1.5
+    node_mode['selected']['fill'] = [155, 155, 155, 255]
+    node_mode['hover']['pen'] = [255, 255, 255, 255]
+    node_mode['hover']['line_width'] = 1.5
+    node_mode['hover']['fill'] = [255, 255, 255, 255]
+    b = dag.Box('sample_box', (50, 50),
+                {'n': 3, 's': 2, 'w': 4, 'e': 5},
+                random.choice(clus),
+                box_data={'modes': node_mode})
+    digraph.add_box(b)
 
-    #e = dag.Edge(b.get_port('n', 1), random.choice(n))
-    #digraph.add_edge(e)
+    e = dag.Edge(b.get_port('n', 1), random.choice(n))
+    digraph.add_edge(e)
 
-    #for i in range(2):
-    #    e = dag.Edge(b.get_port('e', 0), random.choice(n))
-    #    digraph.add_edge(e)
+    for i in range(2):
+        e = dag.Edge(b.get_port('e', 0), random.choice(n))
+        digraph.add_edge(e)
     digraph.process_dot()
 
     app = QApplication(sys.argv)

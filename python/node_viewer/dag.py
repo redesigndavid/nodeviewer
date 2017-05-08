@@ -17,6 +17,9 @@ class Node():
     def ui(self):
         return self._ui
 
+    def ui_pos(self):
+        return self.ui().pos()
+
     def set_graph(self, graph):
         self._graph = graph
 
@@ -66,13 +69,24 @@ class Edge():
 
 
 class Port():
-    def __init__(self, box_key, d, idx):
-        self._box_key = box_key
+    def __init__(self, box, d, idx):
+        self._box = box
+        self._box_key = box.key()
         self._d = d
         self._idx = idx
+        self._ui = None
+
+    def ui_pos(self):
+        return self._box.ui().pos()
 
     def conn_key(self):
         return '"%s":"%s%s"' % (self._box_key, self._d, self._idx)
+
+    def set_ui(self, item):
+        self._ui = item
+
+    def ui(self):
+        return self._ui
 
 
 class Box():
@@ -84,20 +98,20 @@ class Box():
         '<TABLE BORDER="1" WIDTH="{width}" HEIGHT="{height}">'
         '<TR>'
         '<TD WIDTH="1" HEIGHT="{height}">'
-        '    <TABLE BORDER="1" WIDTH="1" HEIGHT="{height}">{w}</TABLE>'
+        '    <TABLE BORDER="0" WIDTH="1" HEIGHT="{height}">{w}</TABLE>'
         '</TD>'
         '<TD>'
-        '    <TABLE BORDER="1" WIDTH="1" HEIGHT="{height}">'
+        '    <TABLE BORDER="0" WIDTH="1" HEIGHT="{height}">'
         '        <TR><TD>'
-        '            <TABLE BORDER="1" WIDTH="{width}"><TR>{n}</TR></TABLE>'
+        '            <TABLE BORDER="0" WIDTH="{width}"><TR>{n}</TR></TABLE>'
         '        </TD></TR>'
         '        <TR><TD>'
-        '            <TABLE BORDER="1" WIDTH="{width}"><TR>{s}</TR></TABLE>'
+        '            <TABLE BORDER="0" WIDTH="{width}"><TR>{s}</TR></TABLE>'
         '        </TD></TR>'
         '    </TABLE>'
         '</TD>'
         '<TD WIDTH="1" HEIGHT="{height}">'
-        '    <TABLE  BORDER="1" WIDTH="1" HEIGHT="{height}">{e}</TABLE>'
+        '    <TABLE  BORDER="0" WIDTH="1" HEIGHT="{height}">{e}</TABLE>'
         '</TD>'
         '</TR>'
         '</TABLE>')
@@ -108,10 +122,18 @@ class Box():
         self._ports = ports
         self._rank_family = rank_family
         self._box_data = box_data or {}
+        self._node_data = box_data  # temp
         self._port_attrs = {}
         self.create_ports()
         self._pos = [0, 0]
         self._graph = None
+        self._ui = None
+
+    def set_ui(self, item):
+        self._ui = item
+
+    def ui(self):
+        return self._ui
 
     def set_graph(self, graph):
         self._graph = graph
@@ -119,17 +141,23 @@ class Box():
     def graph(self):
         return self._graph
 
+    def conn_key(self):
+        return self._box_key
+
     def set_pos(self, pos):
         self._pos = pos
 
     def get_pos(self):
         return self._pos
 
+    def key(self):
+        return self._box_key
+
     def create_ports(self):
         for d, n in self._ports.items():
             for idx in range(n):
                 self._port_attrs[
-                    (d, idx)] = Port(self._box_key, d, idx)
+                    (d, idx)] = Port(self, d, idx)
 
     def get_port(self, d, idx):
         return self._port_attrs[(d, idx)]
@@ -321,7 +349,7 @@ def test():
             e = Edge(node, conn, edge_data={'modes': edge_mode})
             digraph.add_edge(e)
 
-    b = Box('sample_box', (50, 800),
+    b = Box('sample_box', (150, 80),
             {'n': 3, 's': 2, 'w': 4, 'e': 5},
             random.choice(clus),
             box_data={'modes': node_mode})

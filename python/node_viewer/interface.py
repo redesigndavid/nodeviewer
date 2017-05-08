@@ -4,6 +4,10 @@ from PyQt4.QtCore import *
 import math
 import dag
 
+# compatibility
+if not hasattr(Qt, 'MiddleButton'):
+    Qt.MiddleButton = Qt.MidButton
+
 _layers = {'edges': 1,
            'nodes': 2}
 
@@ -175,6 +179,33 @@ class Node(QGraphicsItem):
         self._node_view.update_lines()
 
 
+class Box(Node):
+    def paint(self, painter, *args, **kwargs):
+        fill_color = self._modes.get(
+            self._mode, self._modes.get('normal')).get('fill')
+        pen_color = self._modes.get(
+            self._mode, self._modes.get('normal')).get('pen')
+        pen = QPen(QColor(*pen_color))
+        pen_width = self._modes.get(
+            self._mode, self._modes.get('normal')).get('line_width')
+        pen.setWidth(pen_width)
+        painter.setPen(pen)
+        painter.setBrush(QColor(*fill_color))
+        dim = self._dag_node._dim
+        dim = [dim[0] * 0.5, dim[1] * 0.5]
+        painter.drawRect(QRectF(
+            -0.5 * dim[0], -0.5 * dim[1],
+            dim[0], dim[1]))
+
+    def boundingRect(self):
+        dim = self._dag_node._dim
+        dim = [dim[0] * 0.5, dim[1] * 0.5]
+        return QRectF(
+            -0.5 * dim[0], -0.5 * dim[1],
+            dim[0], dim[1])
+
+
+
 class NodeViewer(QGraphicsView):
     def __init__(self, *args, **kwargs):
         super(NodeViewer, self).__init__(*args, **kwargs)
@@ -207,8 +238,8 @@ class NodeViewer(QGraphicsView):
             self.setDragMode(QGraphicsView.RubberBandDrag)
 
     def mouseReleaseEvent(self, event):
+        self.setDragMode(QGraphicsView.RubberBandDrag)
         if event.button() == Qt.MiddleButton:
-            self.setDragMode(QGraphicsView.RubberBandDrag)
             fake = QMouseEvent(
                 event.type(),
                 event.pos(),
@@ -269,6 +300,12 @@ class NodeViewer(QGraphicsView):
             self.scene.addItem(node)
             self._nodes[nkey] = node
 
+        for nkey, data in self._graph.iter_boxes():
+            node = Box(self, data)
+            node.setPos(*[10 * x for x in data.get_pos()])
+            self.scene.addItem(node)
+            self._nodes[nkey] = node
+
         for edge_key, edge in self._graph.iter_edges():
             gline = ArrowLine(self, edge)
             self.scene.addItem(gline)
@@ -308,7 +345,7 @@ class NodeViewer(QGraphicsView):
             normals = {}
             for edge in node.iter_edges():
                 is_forwards = (edge._src.conn_key() == ('node_%s' % nkey))
-                offset = (edge._src.ui().pos() - edge._dst.ui().pos())
+                offset = (edge._src.ui_pos() - edge._dst.ui_pos())
                 if not is_forwards:
                     offset *= -1
                 offset_length = math.hypot(offset.x(), offset.y())
