@@ -88,6 +88,12 @@ class Port():
     def ui(self):
         return self._ui
 
+    def iter_edges(self):
+        return [self._box.graph().get_edge(edge_key)
+                for edge_key in
+                self._box.graph()._node_edges.get(
+                    self.conn_key(), [])]
+
 
 class Box():
     _ns_text = (
@@ -162,6 +168,9 @@ class Box():
     def get_port(self, d, idx):
         return self._port_attrs[(d, idx)]
 
+    def get_ports(self):
+        return self._port_attrs.items()
+
     def table_data(self):
         width = self._dim[0]
         height = self._dim[1]
@@ -207,13 +216,18 @@ class DiGraph():
         self._edges = {}
         self._nodes = {}
         self._boxes = {}
+        self._ports = {}
         self._node_edges = {}
         self._node_edges = {}
         self._outgoing = {}
         self._ingoing = {}
 
     def add_box(self, box):
+        box.set_graph(self)
         self._boxes[box._box_key] = box
+
+        for port_key, port in box.get_ports():
+            self._ports[port.conn_key()] = port
 
     def add_edge(self, edge):
         if edge.key() in self._edges.keys():
@@ -239,6 +253,10 @@ class DiGraph():
     def iter_nodes(self):
         return [(k[len('node_'):], v)
                 for k, v in self._nodes.items()]
+
+    def iter_ports(self):
+        return [(k[len('node_'):], v)
+                for k, v in self._ports.items()]
 
     def iter_boxes(self):
         return [(k[len('box_'):], v)

@@ -85,7 +85,8 @@ class ArrowLine(QGraphicsPathItem):
         if len(self._points) < 4:
             return
         color = self._connection_data.get(
-            'modes', {}).get(self._mode, {}).get('pen')
+            'modes', {}).get(self._mode, {}).get(
+                    'pen', [255, 255, 255, 255])
         pen_width = self._connection_data.get(
             'modes', {}).get(self._mode, {}).get('line_width', 1.5)
         pen = QPen(QColor(*color))
@@ -145,7 +146,11 @@ class Node(QGraphicsItem):
     def boundingRect(self):
         factor = 0.5 * self._modes.get(
             self._mode, self._modes.get('normal')).get('line_width')
-        return QRectF(-5 - factor, -5 - factor, 10 + (2 * factor), 10 + (2*factor))
+        return QRectF(
+                -5 - factor,
+                -5 - factor,
+                10 + (2 * factor),
+                10 + (2 * factor))
 
     def hoverMoveEvent(self, event):
         self._mode = 'hover'
@@ -203,7 +208,6 @@ class Box(Node):
         return QRectF(
             -0.5 * dim[0], -0.5 * dim[1],
             dim[0], dim[1])
-
 
 
 class NodeViewer(QGraphicsView):
@@ -339,12 +343,19 @@ class NodeViewer(QGraphicsView):
             self._nodes[nkey].setPos(*data['pos'])
 
     def update_lines(self, connections=None, temp=False):
-        for nkey, node in self._graph.iter_nodes():
+        items = []
+        for _, port in self._graph.iter_ports():
+            items.append(port)
+        for _, node in self._graph.iter_nodes():
+            items.append(node)
+
+        for node in items:
 
             # gather node's edge's normals
             normals = {}
+
             for edge in node.iter_edges():
-                is_forwards = (edge._src.conn_key() == ('node_%s' % nkey))
+                is_forwards = (edge._src.conn_key() == node.conn_key())
                 offset = (edge._src.ui_pos() - edge._dst.ui_pos())
                 if not is_forwards:
                     offset *= -1
@@ -359,13 +370,11 @@ class NodeViewer(QGraphicsView):
             for edge_key, normal in normals.items():
                 edge = self._graph.get_edge(edge_key)
                 line = edge.ui()
-                if edge._dst.conn_key() == ('node_%s' % nkey):
-                    node = edge._dst.ui()
-                    line.set_p(0, [node.x(), node.y()])
+                if edge._dst.conn_key() == node.conn_key():
+                    line.set_p(0, [node.ui_pos().x(), node.ui_pos().y()])
                     line.set_p(1, normal)
                 else:
-                    node = edge._src.ui()
-                    line.set_p(3, [node.x(), node.y()])
+                    line.set_p(3, [node.ui_pos().x(), node.ui_pos().y()])
                     line.set_p(2, normal)
 
         # update edge shapes
