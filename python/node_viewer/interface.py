@@ -8,7 +8,7 @@ import dag
 if not hasattr(Qt, 'MiddleButton'):
     Qt.MiddleButton = Qt.MidButton
 
-_layers = {'edges': 1,
+_layers = {'edges': 3,
            'nodes': 2}
 
 
@@ -364,7 +364,7 @@ class NodeViewer(QGraphicsView):
                 normals[edge.key()] = [normal.x(), normal.y()]
 
             # seperate the normals from each other
-            normals = seperate_normals(normals)
+            normals = seperate_normals(normals, repel=node.repeller())
 
             # assign the bezier points based on the seperated normals
             for edge_key, normal in normals.items():
@@ -387,7 +387,7 @@ class NodeViewer(QGraphicsView):
                 print 'bad'
 
 
-def seperate_normals(normals):
+def seperate_normals(normals, repel=None):
     org_norms = dict(normals)
 
     for _ in range(4):
@@ -397,6 +397,9 @@ def seperate_normals(normals):
                 if other_norm != edge]
             if not other_norms:
                 continue
+            if repel:
+                for i in range(10):
+                    other_norms.append(repel)
             oxs = sum([other_norm[0] for other_norm in other_norms])
             oys = sum([other_norm[1] for other_norm in other_norms])
             temp_vec = [org_norms[edge][0] - ((oxs / len(other_norms))*1.10),

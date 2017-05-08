@@ -11,6 +11,9 @@ class Node():
         self._graph = None
         self._ui = None
 
+    def repeller(self):
+        return None
+
     def set_ui(self, item):
         self._ui = item
 
@@ -75,6 +78,13 @@ class Port():
         self._d = d
         self._idx = idx
         self._ui = None
+
+    def repeller(self):
+        return {
+            'n': [0, -1],
+            's': [0, 1],
+            'e': [1, 0],
+            'w': [-1, 0]}[self._d]
 
     def ui_pos(self):
         return self._box.ui().pos()
