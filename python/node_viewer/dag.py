@@ -21,7 +21,8 @@ class Node():
         return self._ui
 
     def ui_pos(self):
-        return self.ui().pos()
+        pos = self.ui().pos()
+        return [pos.x(), pos.y()]
 
     def set_graph(self, graph):
         self._graph = graph
@@ -87,7 +88,25 @@ class Port():
             'w': [-1, 0]}[self._d]
 
     def ui_pos(self):
-        return self._box.ui().pos()
+        dim = [d * -0.5 for d in self._box._dim]
+        mult = self._box._ports[self._d] - 1
+        idx = self._idx - (mult * 0.5)
+        offset = {
+            'n': [
+                (dim[0] / mult) * idx,
+                dim[1] * 0.5],
+            's': [
+                (dim[0] / mult) * idx,
+                dim[1] * -0.5],
+            'e': [
+                dim[0] * -0.5,
+                (dim[1] / mult) * idx],
+            'w': [
+                dim[0] * 0.5,
+                (dim[1] / mult) * idx]}[self._d]
+
+        pos = self._box.ui().pos()
+        return [pos.x() + offset[0], pos.y() + offset[1]]
 
     def conn_key(self):
         return '"%s":"%s%s"' % (self._box_key, self._d, self._idx)

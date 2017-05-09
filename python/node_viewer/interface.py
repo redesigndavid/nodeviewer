@@ -8,7 +8,7 @@ import dag
 if not hasattr(Qt, 'MiddleButton'):
     Qt.MiddleButton = Qt.MidButton
 
-_layers = {'edges': 3,
+_layers = {'edges': 1,
            'nodes': 2}
 
 
@@ -356,7 +356,9 @@ class NodeViewer(QGraphicsView):
 
             for edge in node.iter_edges():
                 is_forwards = (edge._src.conn_key() == node.conn_key())
-                offset = (edge._src.ui_pos() - edge._dst.ui_pos())
+                offset = QPointF(*[
+                    edge._src.ui_pos()[0] - edge._dst.ui_pos()[0],
+                    edge._src.ui_pos()[1] - edge._dst.ui_pos()[1]])
                 if not is_forwards:
                     offset *= -1
                 offset_length = math.hypot(offset.x(), offset.y())
@@ -371,10 +373,10 @@ class NodeViewer(QGraphicsView):
                 edge = self._graph.get_edge(edge_key)
                 line = edge.ui()
                 if edge._dst.conn_key() == node.conn_key():
-                    line.set_p(0, [node.ui_pos().x(), node.ui_pos().y()])
+                    line.set_p(0, node.ui_pos())
                     line.set_p(1, normal)
                 else:
-                    line.set_p(3, [node.ui_pos().x(), node.ui_pos().y()])
+                    line.set_p(3, node.ui_pos())
                     line.set_p(2, normal)
 
         # update edge shapes

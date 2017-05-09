@@ -133,9 +133,13 @@ def test():
             nm += random.choice('abcdefghijklmnopqrstuvwxyz')
         return nm
 
-    for i in range(30):
+    for i in range(130):
         node_mode = {'normal': {}, 'selected': {}, 'hover': {}}
-        color = [random.random() * 55, random.random() * 255, random.random() * 50, 255]
+        color = [
+            random.random() * 55,
+            random.random() * 255,
+            random.random() * 50,
+            255]
         node_mode['normal']['fill'] = color
         node_mode['normal']['line_width'] = 1.5
         node_mode['normal']['pen'] = color
@@ -145,7 +149,10 @@ def test():
         node_mode['hover']['pen'] = [255, 255, 255, 255]
         node_mode['hover']['line_width'] = 1.5
         node_mode['hover']['fill'] = [255, 255, 255, 255]
-        k = dag.Node(random_key(), random.choice(clus), node_data={'modes': node_mode})
+        k = dag.Node(
+                random_key(),
+                random.choice(clus),
+                node_data={'modes': node_mode})
         digraph.add_node(k)
         n.append(k)
 
@@ -163,7 +170,11 @@ def test():
             digraph.add_edge(e)
 
     node_mode = {'normal': {}, 'selected': {}, 'hover': {}}
-    color = [random.random() * 255, random.random() * 55, random.random() * 50, 255]
+    color = [
+        random.random() * 255,
+        random.random() * 55,
+        random.random() * 50,
+        255]
     node_mode['normal']['fill'] = color
     node_mode['normal']['line_width'] = 1.5
     node_mode['normal']['pen'] = color
@@ -173,17 +184,39 @@ def test():
     node_mode['hover']['pen'] = [255, 255, 255, 255]
     node_mode['hover']['line_width'] = 1.5
     node_mode['hover']['fill'] = [255, 255, 255, 255]
-    b = dag.Box('sample_box', (50, 50),
+
+    b = dag.Box('sample_box', (125, 95),
                 {'n': 3, 's': 2, 'w': 4, 'e': 5},
                 random.choice(clus),
                 box_data={'modes': node_mode})
     digraph.add_box(b)
 
-    e = dag.Edge(b.get_port('n', 1), random.choice(n))
-    digraph.add_edge(e)
+    for i in range(3):
+        e = dag.Edge(b.get_port('n', i), random.choice(n), 100)
+        digraph.add_edge(e)
+
+    color = [
+        random.random() * 255,
+        random.random() * 255,
+        random.random() * 50,
+        255]
+    node_mode['normal']['fill'] = color
+    node_mode['normal']['line_width'] = 1.5
+    node_mode['normal']['pen'] = color
+    node_mode['selected']['pen'] = [155, 155, 155, 255]
+    node_mode['selected']['line_width'] = 1.5
+    node_mode['selected']['fill'] = [155, 155, 155, 255]
+    node_mode['hover']['pen'] = [255, 255, 255, 255]
+    node_mode['hover']['line_width'] = 1.5
+    node_mode['hover']['fill'] = [255, 255, 255, 255]
+    b = dag.Box('sample_box2', (145, 335),
+                {'n': 3, 's': 2, 'w': 4, 'e': 5},
+                random.choice(clus),
+                box_data={'modes': node_mode})
+    digraph.add_box(b)
 
     for i in range(2):
-        e = dag.Edge(b.get_port('e', 0), random.choice(n))
+        e = dag.Edge(b.get_port('e', 0), random.choice(n), 1000)
         digraph.add_edge(e)
     digraph.process_dot()
 
