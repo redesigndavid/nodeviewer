@@ -1,8 +1,23 @@
 #!/usr/bin/env python
 import subprocess
+import math
 
 
-class Node():
+def memoize(function):
+    memo = {}
+
+    def wrapper(*args):
+        if args in memo:
+            return memo[args]
+        else:
+            rv = function(*args)
+            memo[args] = rv
+            return rv
+
+    return wrapper
+
+
+class Node(object):
     def __init__(self, node_key, rank_family=None, node_data=None):
         self._node_key = 'node_%s' % node_key
         self._rank_family = rank_family
@@ -33,19 +48,44 @@ class Node():
     def set_pos(self, pos):
         self._pos = pos
 
+    @memoize
     def iter_edges(self):
         return [self.graph().get_edge(edge_key)
                 for edge_key in
                 self.graph()._node_edges.get(self.conn_key(), [])]
+
+    def get_edge_normals(self):
+        # gather node's edge's normals
+        normals = {}
+        for edge in self.iter_edges():
+            is_forwards = (edge._src.conn_key() == self.conn_key())
+            offset = [
+                edge._src.ui_pos()[0] - edge._dst.ui_pos()[0],
+                edge._src.ui_pos()[1] - edge._dst.ui_pos()[1]]
+            if not is_forwards:
+                offset = [dim * -1 for dim in offset]
+            offset_length = math.hypot(offset[0], offset[1])
+            normal = [dim / offset_length for dim in offset]
+            normals[edge.key()] = normal
+        return normals
+
+    @memoize
+    def iter_edge_connections(self):
+        edge_connections = set([])
+        for edge in self.iter_edges():
+            edge_connections.add(edge._src)
+            edge_connections.add(edge._dst)
+        return list(edge_connections)
+
+    @memoize
+    def dot_text(self):
+        return "\n%s [width=1 height=1]" % self._node_key
 
     def get_pos(self):
         return self._pos
 
     def conn_key(self):
         return self._node_key
-
-    def dot_text(self):
-        return "\n%s [width=1 height=1]" % self._node_key
 
 
 class Edge():
@@ -62,9 +102,11 @@ class Edge():
     def ui(self):
         return self._ui
 
+    @memoize
     def key(self):
         return "%s->%s" % (self._src.conn_key(), self._dst.conn_key())
 
+    @memoize
     def dot_text(self):
         return "\n%s" % ("%s -> %s [weight=%s];" % (
             self._src.conn_key(),
@@ -73,41 +115,48 @@ class Edge():
 
 
 class Port():
+
     def __init__(self, box, d, idx):
         self._box = box
         self._box_key = box.key()
         self._d = d
         self._idx = idx
         self._ui = None
-
-    def repeller(self):
-        return {
+        self._repeller = {
             'n': [0, -1],
             's': [0, 1],
             'e': [1, 0],
             'w': [-1, 0]}[self._d]
 
-    def ui_pos(self):
+    def calc_pos(self):
+        '''calculate port position based on box dimensions'''
         dim = [d * -0.5 for d in self._box._dim]
         mult = self._box._ports[self._d] - 1
         idx = self._idx - (mult * 0.5)
         offset = {
             'n': [
-                (dim[0] / mult) * idx,
+                (dim[0] * 0.9 / mult) * idx,
                 dim[1] * 0.5],
             's': [
-                (dim[0] / mult) * idx,
+                (dim[0] * 0.9 / mult) * idx,
                 dim[1] * -0.5],
             'e': [
                 dim[0] * -0.5,
-                (dim[1] / mult) * idx],
+                (dim[1] * 0.9 / mult) * idx],
             'w': [
                 dim[0] * 0.5,
-                (dim[1] / mult) * idx]}[self._d]
+                (dim[1] * 0.9 / mult) * idx]}[self._d]
 
-        pos = self._box.ui().pos()
-        return [pos.x() + offset[0], pos.y() + offset[1]]
+        pos = self._box.ui_pos()
+        self._pos = [pos[0] + offset[0], pos[1] + offset[1]]
 
+    def repeller(self):
+        return self._repeller
+
+    def ui_pos(self):
+        return self._pos
+
+    @memoize
     def conn_key(self):
         return '"%s":"%s%s"' % (self._box_key, self._d, self._idx)
 
@@ -117,11 +166,27 @@ class Port():
     def ui(self):
         return self._ui
 
+    @memoize
     def iter_edges(self):
         return [self._box.graph().get_edge(edge_key)
                 for edge_key in
                 self._box.graph()._node_edges.get(
                     self.conn_key(), [])]
+
+    def get_edge_normals(self):
+        # gather node's edge's normals
+        normals = {}
+        for edge in self.iter_edges():
+            is_forwards = (edge._src.conn_key() == self.conn_key())
+            offset = [
+                edge._src.ui_pos()[0] - edge._dst.ui_pos()[0],
+                edge._src.ui_pos()[1] - edge._dst.ui_pos()[1]]
+            if not is_forwards:
+                offset = [dim * -1 for dim in offset]
+            offset_length = math.hypot(offset[0], offset[1])
+            normal = [dim / offset_length for dim in offset]
+            normals[edge.key()] = normal
+        return normals
 
 
 class Box():
@@ -153,22 +218,47 @@ class Box():
 
     def __init__(self, n, dim, ports, rank_family=None, box_data=None):
         self._box_key = 'box_%s' % n
-        self._dim = dim
         self._ports = ports
         self._rank_family = rank_family
         self._box_data = box_data or {}
         self._node_data = box_data  # temp
         self._port_attrs = {}
-        self.create_ports()
         self._pos = [0, 0]
         self._graph = None
         self._ui = None
+        self._dim = dim
+        self.set_dim(dim)
+        self.create_ports()
+
+    def set_dim(self, dim):
+        self._dim = dim
+        for port in self._port_attrs.values():
+            # update ports
+            port.calc_pos()
+
+    def get_dim(self):
+        return self._dim
 
     def set_ui(self, item):
+        for port in self._port_attrs.values():
+            # update ports
+            port.calc_pos()
         self._ui = item
+
+    def iter_edge_connections(self):
+        edge_connections = set([])
+        for port in self._port_attrs.values():
+            for edge in port.iter_edges():
+                edge_connections.add(edge._src)
+                edge_connections.add(edge._dst)
+
+        return list(edge_connections)
 
     def ui(self):
         return self._ui
+
+    def ui_pos(self):
+        return self._pos
 
     def set_graph(self, graph):
         self._graph = graph
@@ -181,6 +271,9 @@ class Box():
 
     def set_pos(self, pos):
         self._pos = pos
+        for port in self._port_attrs.values():
+            # update ports
+            port.calc_pos()
 
     def get_pos(self):
         return self._pos
@@ -201,8 +294,8 @@ class Box():
         return self._port_attrs.items()
 
     def table_data(self):
-        width = self._dim[0]
-        height = self._dim[1]
+        width = self._dim[0] * 1.4
+        height = self._dim[1] * 1.4
         half_height = height / 2.0
         w_height = height / self._ports['w']
         e_height = height / self._ports['e']
@@ -296,6 +389,7 @@ class DiGraph():
 
     def process_dot(self):
         dot_text = "digraph G {"
+        dot_text += "\nnode[fontsize=1]\n"
         for edge_key, edge in self.iter_edges():
             dot_text += edge.dot_text()
 
@@ -423,10 +517,6 @@ def test():
         print node_key
         for edge in node_data.iter_edges():
             print edge.key()
-
-
-
-
 
 
 if __name__ == '__main__':
