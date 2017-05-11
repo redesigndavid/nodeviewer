@@ -1,6 +1,7 @@
 import sys
 from PyQt4.QtGui import QApplication
 from node_viewer import NodeViewer
+from node_viewer import style
 import random
 
 random.seed(140690)
@@ -135,50 +136,46 @@ def test():
             nm += random.choice('abcdefghijklmnopqrstuvwxyz')
         return nm
 
-    for i in range(1000):
-        node_mode = {'normal': {}, 'selected': {}, 'hover': {}}
-        color = [random.random() * 5, (random.random() * 50) + 200, random.random() * 10, 255]
-        node_mode['normal']['fill'] = color
-        node_mode['normal']['line_width'] = 1.5
-        node_mode['normal']['pen'] = color
-        node_mode['selected']['pen'] = [155, 155, 155, 255]
-        node_mode['selected']['line_width'] = 1.5
-        node_mode['selected']['fill'] = [155, 155, 155, 255]
-        node_mode['hover']['pen'] = [255, 255, 255, 255]
-        node_mode['hover']['line_width'] = 1.5
-        node_mode['hover']['fill'] = [255, 255, 255, 255]
-        k = dag.Node(random_key(), random.choice(clus), node_data={'modes': node_mode})
+    for i in range(100):
+        color = [
+            random.random() * 5,
+            (random.random() * 150) + 55,
+            random.random() * 10,
+            255]
+        k = dag.Node(random_key(), random.choice(clus), node_data={})
+        k.style().set_attribute('fill_color', color, 'normal')
+        k.style().set_attribute('pen_color', color, 'normal')
         digraph.add_node(k)
         n.append(k)
 
     for node in n:
         for i in range(random.choice(range(1)) + 1):
-            color = node._node_data['modes']['normal']['fill']
-            edge_mode = {'normal': {}, 'hover': {}, 'selected': {}}
-            edge_mode['normal']['pen'] = color
-            edge_mode['hover']['pen'] = [255, 255, 255, 255]
-            edge_mode['selected']['pen'] = [155, 155, 155, 255]
-            edge_mode['normal']['line_width'] = 1
-            edge_mode['hover']['line_width'] = 1
-            edge_mode['selected']['line_width'] = 1
+            color = node.style().get_value('fill_color', 'normal')
             conn = random.choice(n)
             while node == conn:
                 conn = random.choice(n)
-            e = dag.Edge(node, conn, edge_data={'modes': edge_mode})
+            e = dag.Edge(node, conn, edge_data={})
+            e.style().set_attribute('fill_color', color, 'normal')
+            e.style().set_attribute('pen_color', color, 'normal')
             digraph.add_edge(e)
 
     b = dag.Box('sample_box', (500, 800),
-            {'n': 3, 's': 5, 'w': 4, 'e': 5},
-            random.choice(clus),
-            box_data={'modes': node_mode})
+                {'n': 3, 's': 5, 'w': 4, 'e': 5},
+                random.choice(clus),
+                box_data={})
+    color = [200, 200, 150, 255]
+    b.style().set_attribute('fill_color',  color, 'normal')
+    b.style().set_attribute('pen_color',  color, 'normal')
     digraph.add_box(b)
 
     for i in range(5):
-        e = dag.Edge(b.get_port('s', i), random.choice(n))
+        e = dag.Edge(b.get_port('s', i), random.choice(n), 100)
+        e.style().set_attribute('line_style', 'dash', style._all_states)
         digraph.add_edge(e)
 
     for i in range(3):
         e = dag.Edge(b.get_port('e', 0), random.choice(n))
+        e.style().set_attribute('line_style', 'dot', style._all_states)
         digraph.add_edge(e)
     digraph.process_dot()
 

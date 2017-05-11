@@ -3,8 +3,6 @@ import math
 from PyQt4.QtGui import *
 from PyQt4.QtCore import *
 
-from . import style
-
 # compatibility
 if not hasattr(Qt, 'MiddleButton'):
     Qt.MiddleButton = Qt.MidButton
@@ -21,7 +19,6 @@ class ArrowLine(QGraphicsPathItem):
         self.setCacheMode(QGraphicsItem.NoCache)
         self.setFlag(QGraphicsItem.ItemIsSelectable)
 
-        self._style = edge_style or style.EdgeStyle()
         self._dag_edge = edge
         self._node_view = node_view
         self._connection_data = edge._edge_data
@@ -31,7 +28,7 @@ class ArrowLine(QGraphicsPathItem):
         self._dag_edge.set_ui(self)
 
     def style(self):
-        return self._style
+        return self._dag_edge._style
 
     def set_p(self, idx, p):
         self._points[idx] = QPointF(*p)
@@ -120,9 +117,7 @@ class Node(QGraphicsItem):
         super(Node, self).__init__(*args, **kwargs)
         self._node_view = node_view
         self._dag_node = node
-        self._style = node_style or style.NodeStyle()
         self._key = node.conn_key()
-        self._modes = node._node_data.get('modes')
         self._state = 'normal'
         self._tip = False
 
@@ -135,7 +130,7 @@ class Node(QGraphicsItem):
         self.setCacheMode(QGraphicsItem.NoCache)
 
     def style(self):
-        return self._style
+        return self._dag_node._style
 
     def paint(self, painter, *args, **kwargs):
         fill_color = self.style().get_value('fill_color', self._state)
@@ -154,8 +149,8 @@ class Node(QGraphicsItem):
         self._dag_node.set_pos([x, y])
 
     def boundingRect(self):
-        factor = 0.5 * self._modes.get(
-            self._state, self._modes.get('normal')).get('line_width')
+        pen_width = self.style().get_value('line_width', self._state)
+        factor = 0.5 * pen_width
         return QRectF(
             -5 - factor,
             -5 - factor,
@@ -184,7 +179,8 @@ class Node(QGraphicsItem):
         self.update()
         pos = [self.pos().x(), self.pos().y()]
         self._dag_node.set_pos(pos)
-        nodes = self._dag_node.iter_edge_connections()
+        #nodes = self._dag_node.iter_edge_connections()
+        nodes = [self._dag_node]
         self._node_view.update_lines(nodes, fast=True)
 
     def mouseReleaseEvent(self, event):
@@ -219,6 +215,14 @@ class Box(Node):
         return QRectF(
             -0.5 * dim[0], -0.5 * dim[1],
             dim[0], dim[1])
+
+    def mouseMoveEvent(self, event):
+        QGraphicsItem.mouseMoveEvent(self, event)
+        self.update()
+        pos = [self.pos().x(), self.pos().y()]
+        self._dag_node.set_pos(pos)
+        nodes = [port for (_, port) in self._dag_node.get_ports()]
+        self._node_view.update_lines(nodes, fast=True)
 
 
 class NodeViewer(QGraphicsView):

@@ -1,4 +1,4 @@
-
+import copy
 _all_states = '_all_states_'
 _states = ['normal', 'hover', 'selected', 'click']
 
@@ -37,7 +37,7 @@ class Style():
 
     def __init__(self):
         if self._defaults:
-            self._styles = self._defaults._styles
+            self._styles = copy.deepcopy(self._defaults._styles)
         else:
             self._styles = {}
 
@@ -97,5 +97,8 @@ class EdgeStyle(Style):
     _defaults.set_attribute('pen_color', (0, 0, 0, 255), _all_states)
     _defaults.set_attribute('line_width', 2, _all_states)
     _defaults.set_attribute('pen_color', (0, 0, 0, 255), 'normal')
+    _defaults.set_attribute('pen_color', (150, 255, 255, 255), 'selected')
+    _defaults.set_attribute('pen_color', (120, 255, 255, 255), 'hover')
+    _defaults.set_attribute('pen_color', (255, 255, 255, 255), 'click')
     _defaults.set_attribute('line_style', 'solid', _all_states)
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import subprocess
 import math
+from . import style
 
 
 def memoize(function):
@@ -25,6 +26,10 @@ class Node(object):
         self._node_data = node_data or {}
         self._graph = None
         self._ui = None
+        self._style = style.NodeStyle()
+
+    def style(self):
+        return self._style
 
     def repeller(self):
         return None
@@ -95,6 +100,10 @@ class Edge():
         self._weight = w
         self._edge_data = edge_data or {}
         self._ui = None
+        self._style = style.EdgeStyle()
+
+    def style(self):
+        return self._style
 
     def set_ui(self, item):
         self._ui = item
@@ -229,6 +238,10 @@ class Box():
         self._dim = dim
         self.set_dim(dim)
         self.create_ports()
+        self._style = style.NodeStyle()
+
+    def style(self):
+        return self._style
 
     def set_dim(self, dim):
         self._dim = dim
