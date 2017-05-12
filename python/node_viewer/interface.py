@@ -53,7 +53,7 @@ class ArrowLine(QGraphicsPathItem):
         s_line_vec = (s_line.p2() - s_line.p1())
         s_line_length = math.hypot(s_line_vec.x(), s_line_vec.y())
         offset = (s_line_vec / s_line_length) * 6
-        arrow_size = pen_width * 2
+        arrow_size = pen_width * 4
         c_offset = (s_line_vec / s_line_length) * (6 + (2 * pen_width))
         arrowP1 = s_line.p1() + offset + QPointF(
             math.sin(angle + math.pi / 3.0) * arrow_size,
@@ -105,7 +105,10 @@ class ArrowLine(QGraphicsPathItem):
         self.update()
 
     def hoverLeaveEvent(self, event):
-        if self not in self._node_view.scene.selectedItems():
+        inherit_selection = self._node_view.inherit_selection
+        if self in inherit_selection:
+            self._state = 'inherit_selected'
+        elif self not in self._node_view.scene.selectedItems():
             self._state = 'normal'
         else:
             self._state = 'selected'
@@ -179,8 +182,10 @@ class Node(QGraphicsItem):
         self.update()
         pos = [self.pos().x(), self.pos().y()]
         self._dag_node.set_pos(pos)
-        #nodes = self._dag_node.iter_edge_connections()
-        nodes = [self._dag_node]
+        nodes = [
+            node._dag_node
+            for node in self._node_view.scene.selectedItems()
+            if hasattr(node, '_dag_node')]
         self._node_view.update_lines(nodes, fast=True)
 
     def mouseReleaseEvent(self, event):
@@ -221,7 +226,12 @@ class Box(Node):
         self.update()
         pos = [self.pos().x(), self.pos().y()]
         self._dag_node.set_pos(pos)
-        nodes = [port for (_, port) in self._dag_node.get_ports()]
+        nodes = [
+            node._dag_node
+            for node in self._node_view.scene.selectedItems()
+            if hasattr(node, '_dag_node')]
+        ports = [port for (_, port) in self._dag_node.get_ports()]
+        nodes.extend(ports)
         self._node_view.update_lines(nodes, fast=True)
 
 
@@ -231,6 +241,7 @@ class NodeViewer(QGraphicsView):
         self._nodedata = None
         self.scene = QGraphicsScene(self)
         self.scene.setBackgroundBrush(QColor(80, 80, 80, 255))
+        self.scene.selectionChanged.connect(self._quick_selection_changed)
         self.setScene(self.scene)
         self.setRenderHints(QPainter.Antialiasing)
         self.setViewportUpdateMode(QGraphicsView.BoundingRectViewportUpdate)
@@ -240,6 +251,54 @@ class NodeViewer(QGraphicsView):
 
         self.scene.addLine(0, 0, 0, 10)
         self.scene.addLine(0, 0, 10, 0)
+        self.inherit_selection = []
+
+    def _quick_selection_changed(self):
+        selected_items = self.scene.selectedItems()
+
+        for item in selected_items:
+            item._state = 'consider_selection'
+
+    def _selection_changed(self):
+        selected_items = self.scene.selectedItems()
+
+        selected_nodes = [
+                node for node in self._nodes.values() if node in
+                selected_items]
+        selected_boxes = [
+                node for node in self._boxes.values() if node in
+                selected_items]
+
+        selected_nodes += selected_boxes
+
+        selected_edges = [
+                node for node in self._edges.values() if node in
+                selected_items]
+
+        if selected_nodes:
+            for edge in selected_edges:
+                edge.setSelected(False)
+
+        iter_items = selected_nodes or selected_edges
+
+        self.inherit_selection = []
+
+        for item in iter_items:
+            if isinstance(item, ArrowLine):
+                continue
+            for edge in item._dag_node.iter_edges():
+                self.inherit_selection.append(edge.ui())
+
+        for item in (self._nodes.values()
+                     + self._edges.values()
+                     + self._boxes.values()):
+            if item in iter_items:
+                item._state = 'selected'
+            elif item in self.inherit_selection:
+                item._state = 'inherit_selected'
+            else:
+                item._state = 'normal'
+        self.update_lines()
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MiddleButton:
@@ -267,16 +326,7 @@ class NodeViewer(QGraphicsView):
             QGraphicsView.mouseReleaseEvent(self, fake)
         else:
             QGraphicsView.mouseReleaseEvent(self, event)
-
-        selected_items = self.scene.selectedItems()
-
-        for item in self._nodes.values() + self._edges.values():
-            if item in selected_items:
-                item._state = 'selected'
-            else:
-
-                item._state = 'normal'
-        self.update_lines()
+        self._selection_changed()
 
     def wheelEvent(self, event):
         factor = math.pow(2.0, - event.delta() / 240.0)
@@ -331,6 +381,7 @@ class NodeViewer(QGraphicsView):
         for edge_key, edge in self._graph.iter_edges():
             gline = ArrowLine(self, edge)
             self.scene.addItem(gline)
+            self._edges[edge_key] = gline
 
         self.update_lines()
         self.fit_in_view()

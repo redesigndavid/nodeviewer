@@ -240,6 +240,9 @@ class Box():
         self.create_ports()
         self._style = style.NodeStyle()
 
+    def get_edge_normals(self):
+        return {} 
+
     def style(self):
         return self._style
 
@@ -266,6 +269,12 @@ class Box():
                 edge_connections.add(edge._dst)
 
         return list(edge_connections)
+
+    def iter_edges(self):
+        edges = []
+        for port in self._port_attrs.values():
+            edges.extend(port.iter_edges())
+        return edges
 
     def ui(self):
         return self._ui
