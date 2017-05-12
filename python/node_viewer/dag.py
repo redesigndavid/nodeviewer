@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import subprocess
 import math
-from . import style
+from node_viewer import style
 
 
 def memoize(function):
@@ -241,7 +241,7 @@ class Box():
         self._style = style.NodeStyle()
 
     def get_edge_normals(self):
-        return {} 
+        return {}
 
     def style(self):
         return self._style
@@ -409,6 +409,50 @@ class DiGraph():
     def iter_edges(self):
         return self._edges.items()
 
+    def all_routes(self):
+        all_items = (
+            self._nodes.values()
+            + self._boxes.values()
+            + self._ports.values())
+        connected_nodes = [
+                item for item in all_items if item.iter_edges()]
+
+        starts = [
+            item for item in connected_nodes
+            if not self._ingoing.get(item)]
+
+        paths = []
+
+        def dfs(item, history=None, visited=None):
+            if not history:
+                history = [item]
+            else:
+                history = history[:]
+                history.append(item)
+
+            if not visited:
+                visited = [item]
+            else:
+                visited = visited[:]
+                visited.append(item)
+
+            outgoings = [
+                    og
+                    for og in list(
+                        self._outgoing.get(item, []))
+                    if og not in visited]
+
+            if not outgoings:
+                paths.append(history[:])
+            else:
+                for outgoing in outgoings:
+                    dfs(outgoing, history, visited)
+
+        for item in starts:
+            dfs(item)
+
+        return paths
+
     def process_dot(self):
         dot_text = "digraph G {"
         dot_text += "\nnode[fontsize=1]\n"
@@ -418,9 +462,11 @@ class DiGraph():
         # write in clusters
         rank_family = {}
         for node in self._nodes.values():
-            rank_family.setdefault(node._rank_family or "main", []).append(node)
+            rank_family.setdefault(
+                    node._rank_family or "main", []).append(node)
         for box in self._boxes.values():
-            rank_family.setdefault(box._rank_family or "main", []).append(box)
+            rank_family.setdefault(
+                    box._rank_family or "main", []).append(box)
 
         for rf, items in rank_family.items():
             dot_text += "\nsubgraph cluster_%s {rank=same; nodesep=30;" % rf
@@ -488,7 +534,7 @@ def test():
             nm += random.choice('abcdefghijklmnopqrstuvwxyz')
         return nm
 
-    for i in range(5):
+    for i in range(50):
         node_mode = {'normal': {}, 'selected': {}, 'hover': {}}
         color = [random.random() * 55, random.random() * 255, random.random() * 50, 255]
         node_mode['normal']['fill'] = color
@@ -526,6 +572,7 @@ def test():
         digraph.add_edge(e)
 
     digraph.process_dot()
+
     for edge_key, edge in digraph.iter_edges():
         print edge.key()
 
@@ -540,6 +587,18 @@ def test():
         for edge in node_data.iter_edges():
             print edge.key()
 
+    same_start_ends = {}
+    for route in digraph.all_routes():
+        if len(route) < 2:
+            continue
+        same_start_ends.setdefault((route[0], route[-1], len(route)), []).append(route)
+    for routes in same_start_ends.values():
+        if len(routes) < 2:
+            continue
+        print '*'*80
+        for route in routes:
+            print ' '.join(r.conn_key().split('_')[-1] for r in route)
+            
 
 if __name__ == '__main__':
     test()
