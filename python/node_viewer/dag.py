@@ -414,8 +414,9 @@ class DiGraph():
             self._nodes.values()
             + self._boxes.values()
             + self._ports.values())
+
         connected_nodes = [
-                item for item in all_items if item.iter_edges()]
+            item for item in all_items if item.iter_edges()]
 
         starts = [
             item for item in connected_nodes
@@ -437,10 +438,9 @@ class DiGraph():
                 visited.append(item)
 
             outgoings = [
-                    og
-                    for og in list(
-                        self._outgoing.get(item, []))
-                    if og not in visited]
+                og for og in list(
+                    self._outgoing.get(item, []))
+                if og not in visited]
 
             if not outgoings:
                 paths.append(history[:])
@@ -453,28 +453,90 @@ class DiGraph():
 
         return paths
 
-    def process_dot(self):
+    def find_matching_bookends(self):
+        same_source_and_end = []
+
+        # look for routes with matching start and ends
+        same_start_ends = {}
+        for route in self.all_routes():
+            if len(route) < 2:
+                continue
+            same_start_ends.setdefault(
+                (route[0], route[-1], len(route)), []).append(route)
+
+        # for every group of matching start and end
+        # look for contiguous matching
+        for routes in same_start_ends.values():
+            if len(routes) < 2:
+                continue
+
+            matching = [
+                len(set([route[idx] for route in routes])) != 1
+                for idx in range(len(routes[0]))]
+
+            # find contiguous groups
+            prev = None
+            group = []
+            groups = []
+            for idx in range(len(matching)):
+                if matching[idx]:
+                    group.append(idx)
+                elif prev and matching[idx]:
+                    group.append(idx)
+                elif prev and not matching[idx]:
+                    groups.append(group)
+                    group = []
+                prev = matching[idx]
+            for group in groups:
+                items = []
+                for idx in group:
+                    items.extend([route[idx] for route in routes])
+                same_source_and_end.append(items)
+
+        return same_source_and_end
+
+    def process_dot(self, autosubgraph=True):
+
         dot_text = "digraph G {"
         dot_text += "\nnode[fontsize=1]\n"
+
         for edge_key, edge in self.iter_edges():
             dot_text += edge.dot_text()
 
         # write in clusters
         rank_family = {}
-        for node in self._nodes.values():
-            rank_family.setdefault(
+        if autosubgraph:
+            node_groups = {}
+            group_nodes = dict(enumerate(self.find_matching_bookends()))
+
+            for idx, node_group in group_nodes.items():
+                for node in node_group:
+                    node_groups[node] = idx
+            for node in self._nodes.values():
+                idx = node_groups.get(node, 'main')
+                rank_family.setdefault(
+                    'group%s' % idx, []).append(node)
+            for box in self._boxes.values():
+                idx = node_groups.get(box, 'main')
+                rank_family.setdefault(
+                    'group%s' % idx, []).append(box)
+
+        else:
+            for node in self._nodes.values():
+                rank_family.setdefault(
                     node._rank_family or "main", []).append(node)
-        for box in self._boxes.values():
-            rank_family.setdefault(
+            for box in self._boxes.values():
+                rank_family.setdefault(
                     box._rank_family or "main", []).append(box)
 
         for rf, items in rank_family.items():
-            dot_text += "\nsubgraph cluster_%s {rank=same; nodesep=30;" % rf
+            if rf != 'groupmain':
+                dot_text += "\nsubgraph cluster_%s {rank=same; nodesep=30;" % rf
 
             for item in items:
                 dot_text += item.dot_text()
-
-            dot_text += "}\n"
+            if rf != 'groupmain':
+                dot_text += "}\n"
 
         dot_text += "}\n"
 
@@ -508,6 +570,9 @@ class DiGraph():
         p.stdin.write(dot_text)
         p.stdin.close()
 
+        for line in dot_text.splitlines():
+            if line.count('cluster'):
+                print line
         for line in plain_text.splitlines():
             line = line.strip()
             if not line.startswith('node'):
@@ -534,7 +599,7 @@ def test():
             nm += random.choice('abcdefghijklmnopqrstuvwxyz')
         return nm
 
-    for i in range(50):
+    for i in range(30):
         node_mode = {'normal': {}, 'selected': {}, 'hover': {}}
         color = [random.random() * 55, random.random() * 255, random.random() * 50, 255]
         node_mode['normal']['fill'] = color
@@ -586,19 +651,14 @@ def test():
         print node_key
         for edge in node_data.iter_edges():
             print edge.key()
+    print '---'
 
-    same_start_ends = {}
-    for route in digraph.all_routes():
-        if len(route) < 2:
-            continue
-        same_start_ends.setdefault((route[0], route[-1], len(route)), []).append(route)
-    for routes in same_start_ends.values():
-        if len(routes) < 2:
-            continue
-        print '*'*80
-        for route in routes:
-            print ' '.join(r.conn_key().split('_')[-1] for r in route)
-            
+    same_source_and_end = digraph.find_matching_bookends()
+
+    for group in same_source_and_end:
+        print [nod.conn_key() for nod in group]
+
+
 
 if __name__ == '__main__':
     test()

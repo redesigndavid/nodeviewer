@@ -240,7 +240,7 @@ class NodeViewer(QGraphicsView):
         super(NodeViewer, self).__init__(*args, **kwargs)
         self._nodedata = None
         self.scene = QGraphicsScene(self)
-        self.scene.setBackgroundBrush(QColor(80, 80, 80, 255))
+        self.scene.setBackgroundBrush(QColor(180, 180, 180, 255))
         self.scene.selectionChanged.connect(self._quick_selection_changed)
         self.setScene(self.scene)
         self.setRenderHints(QPainter.Antialiasing)
