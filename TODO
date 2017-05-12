@@ -1,0 +1,11 @@
+
+
+1. inherited selection colors
+2. seperate normals might need to happen on
+   a per neighbor port rather than all ports
+   at the same time.
+3. labels
+4. selection change update all colors
+5. and onclick show details
+6. keyboard short cuts
+7. grouping according to similar inputs and outputs
