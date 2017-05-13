@@ -7,7 +7,7 @@ from PyQt4.QtCore import *
 if not hasattr(Qt, 'MiddleButton'):
     Qt.MiddleButton = Qt.MidButton
 
-_layers = {'edges': 10,
+_layers = {'edges': 1,
            'nodes': 2}
 
 
@@ -46,20 +46,24 @@ class ArrowLine(QGraphicsPathItem):
 
         stroker = QPainterPathStroker()
         stroker.setWidth(1)
-
-        src_shape = QPainterPath(self._dag_edge._src.ui()._path)
-        src_shape.translate(QPointF(p1))
-        src_shape = stroker.createStroke(src_shape)
-        self.src_shape = QPainterPath(src_shape)
+        try:
+            dst_shape = QPainterPath(self._dag_edge._dst.ui()._path)
+        except:
+            from PyQt4.QtCore import pyqtRemoveInputHook;
+            pyqtRemoveInputHook();
+            import pdb;pdb.set_trace();
+        dst_shape.translate(QPointF(p1))
+        dst_shape = stroker.createStroke(dst_shape)
+        # self.dst_shape = QPainterPath(dst_shape)
 
         line_shape = QPainterPath(p1)
         line_shape.lineTo((bez_p1 * quarter) + p1)
         line_shape = stroker.createStroke(line_shape)
 
         intersection = line_shape.intersected(
-            src_shape).toFillPolygon().boundingRect().center()
-        self.collide = line_shape.intersected(
-            src_shape).toFillPolygon().boundingRect()
+            dst_shape).toFillPolygon().boundingRect().center()
+        # self.collide = line_shape.intersected(
+        #     dst_shape).toFillPolygon().boundingRect()
 
         s_line = QLineF(p1, (bez_p1 * quarter) + p1)
         angle = math.acos(s_line.dx() / (s_line.length() + 0.00))
@@ -74,7 +78,7 @@ class ArrowLine(QGraphicsPathItem):
             math.sin(angle + math.pi / 3.0) * arrow_width,
             math.cos(angle + math.pi / 3.0) * arrow_width)
 
-        arrowP2 = intersection  + QPointF(
+        arrowP2 = intersection + QPointF(
             math.sin(angle + math.pi - math.pi / 3.0) * arrow_width,
             math.cos(angle + math.pi - math.pi / 3.0) * arrow_width)
 
@@ -115,10 +119,10 @@ class ArrowLine(QGraphicsPathItem):
         painter.setBrush(QColor(*color))
         painter.drawPolygon(self.arrow_head)
 
-        painter.setBrush(QColor(0,0,0,200))
-        painter.drawRect(self.collide)
-        painter.setBrush(QColor(0,255,0,200))
-        painter.drawPath(self.src_shape)
+        # painter.setBrush(QColor(0,0,0,200))
+        # painter.drawRect(self.collide)
+        # painter.setBrush(QColor(0,255,0,200))
+        # painter.drawPath(self.dst_shape)
 
     def hoverMoveEvent(self, event):
         self._state = 'hover'
@@ -273,7 +277,7 @@ class Box(Node):
             node._dag_node
             for node in self._node_view.scene.selectedItems()
             if hasattr(node, '_dag_node')]
-        ports = [port for (_, port) in self._dag_node.get_ports()]
+        ports = [port for port in self._dag_node.get_ports()]
         nodes.extend(ports)
         self._node_view.update_lines(nodes, fast=True)
 
@@ -283,7 +287,7 @@ class NodeViewer(QGraphicsView):
         super(NodeViewer, self).__init__(*args, **kwargs)
         self._nodedata = None
         self.scene = QGraphicsScene(self)
-        self.scene.setBackgroundBrush(QColor(180, 180, 180, 255))
+        self.scene.setBackgroundBrush(QColor(100, 80, 80, 255))
         self.scene.selectionChanged.connect(self._quick_selection_changed)
         self.setScene(self.scene)
         self.setRenderHints(QPainter.Antialiasing)
@@ -478,7 +482,7 @@ class NodeViewer(QGraphicsView):
 
 def seperate_normals(normals, repel=None):
     org_norms = dict(normals)
-
+    mult = 0.2 if not repel else 1.2
     for _ in range(4):
         for edge, normal in normals.items():
             other_norms = [
@@ -489,15 +493,22 @@ def seperate_normals(normals, repel=None):
             if repel:
                 for i in range(3):
                     other_norms.append(repel)
+
             oxs = sum([other_norm[0] for other_norm in other_norms])
             oys = sum([other_norm[1] for other_norm in other_norms])
-            temp_vec = [org_norms[edge][0] - ((oxs / len(other_norms))*0.20),
-                        org_norms[edge][1] - ((oys / len(other_norms))*0.20)]
+
+            temp_vec = [
+                org_norms[edge][0] - ((oxs / len(other_norms)) * mult),
+                org_norms[edge][1] - ((oys / len(other_norms)) * mult)]
+
             temp_vec_length = math.hypot(temp_vec[0], temp_vec[1])
+
             if not temp_vec_length:
                 continue
+
             normals[edge] = [temp_vec[0] / temp_vec_length,
                              temp_vec[1] / temp_vec_length]
+
         org_norms.update(normals)
 
     return org_norms

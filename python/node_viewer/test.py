@@ -135,7 +135,7 @@ def test():
             nm += random.choice('abcdefghijklmnopqrstuvwxyz')
         return nm
 
-    for i in range(30):
+    for i in range(330):
         color = [
             random.random() * 5,
             (random.random() * 150) + 55,
@@ -146,6 +146,10 @@ def test():
         k.style().set_attribute('pen_color', color, 'normal')
         k.style().set_attribute(
             'shape', random.choice(['rect', 'round']), '_all_states_')
+        k.style().set_attribute(
+            'size',
+            [(random.random() * 5) + 15, (random.random() * 5) + 15],
+            '_all_states_')
         digraph.add_node(k)
         n.append(k)
 
@@ -158,26 +162,36 @@ def test():
             e = dag.Edge(node, conn, edge_data={})
             e.style().set_attribute('fill_color', color, 'normal')
             e.style().set_attribute('pen_color', color, 'normal')
+            e.style().set_attribute('arrow_width', 5 + (random.random() * 8), 'normal')
+            e.style().set_attribute('line_width', 2 + (random.random() * 3), 'normal')
             digraph.add_edge(e)
 
-    #b = dag.Box('sample_box', (500, 800),
-    #            {'n': 3, 's': 5, 'w': 4, 'e': 5},
-    #            random.choice(clus),
-    #            box_data={})
-    #color = [200, 200, 150, 255]
-    #b.style().set_attribute('fill_color',  color, 'normal')
-    #b.style().set_attribute('pen_color',  color, 'normal')
-    #digraph.add_box(b)
+    b = dag.Box('sample_box', (500, 800),
+                {'n': 3, 's': 5, 'w': 4, 'e': 5},
+                random.choice(clus),
+                box_data={})
+    color = [200, 200, 150, 255]
+    b.style().set_attribute('fill_color',  color, 'normal')
+    b.style().set_attribute('pen_color',  color, 'normal')
+    digraph.add_box(b)
 
-    #for i in range(5):
-    #    e = dag.Edge(b.get_port('s', i), random.choice(n), 100)
-    #    e.style().set_attribute('line_style', 'dash', style._all_states)
-    #    digraph.add_edge(e)
+    for i in range(5):
+        e = dag.Edge(b.get_port('s', i), random.choice(n), 100)
+        e.style().set_attribute('line_style', 'dash', style._all_states)
+        e.style().set_attribute('pen_color', [251,250,250, 255], 'normal')
+        digraph.add_edge(e)
 
-    #for i in range(3):
-    #    e = dag.Edge(b.get_port('e', 0), random.choice(n))
-    #    e.style().set_attribute('line_style', 'dot', style._all_states)
-    #    digraph.add_edge(e)
+    for i in range(3):
+        e = dag.Edge(random.choice(n), random.choice(b.get_ports()))
+        e.style().set_attribute('line_style', 'dot', style._all_states)
+        e.style().set_attribute('pen_color', [251,250,250, 255], 'normal')
+        digraph.add_edge(e)
+
+    for i in range(3):
+        e = dag.Edge(b.get_port('e', 0), random.choice(n))
+        e.style().set_attribute('line_style', 'dot', style._all_states)
+        e.style().set_attribute('pen_color', [250,250,250, 255], 'normal')
+        digraph.add_edge(e)
     digraph.process_dot()
 
     app = QApplication(sys.argv)

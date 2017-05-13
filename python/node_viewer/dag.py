@@ -130,7 +130,7 @@ class Port():
         self._box_key = box.key()
         self._d = d
         self._idx = idx
-        self._ui = None
+        self._ui = box._ui
         self._repeller = {
             'n': [0, -1],
             's': [0, 1],
@@ -173,6 +173,8 @@ class Port():
         self._ui = item
 
     def ui(self):
+        if not self._ui:
+            return self._box.ui()
         return self._ui
 
     @memoize
@@ -313,7 +315,7 @@ class Box():
         return self._port_attrs[(d, idx)]
 
     def get_ports(self):
-        return self._port_attrs.items()
+        return self._port_attrs.values()
 
     def table_data(self):
         width = self._dim[0] * 1.4
@@ -370,7 +372,7 @@ class DiGraph():
         box.set_graph(self)
         self._boxes[box._box_key] = box
 
-        for port_key, port in box.get_ports():
+        for port in box.get_ports():
             self._ports[port.conn_key()] = port
 
     def add_edge(self, edge):
@@ -564,11 +566,11 @@ class DiGraph():
         p.stdin.close()
         plain_text = p.stdout.read()
 
-        p = subprocess.Popen(
-            ['dot', '-Tpng', '-o', '/var/tmp/t.png'],
-            stdin=subprocess.PIPE)
-        p.stdin.write(dot_text)
-        p.stdin.close()
+        #p = subprocess.Popen(
+        #    ['dot', '-Tpng', '-o', '/var/tmp/t.png'],
+        #    stdin=subprocess.PIPE)
+        #p.stdin.write(dot_text)
+        #p.stdin.close()
 
         for line in dot_text.splitlines():
             if line.count('cluster'):
