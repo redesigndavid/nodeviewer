@@ -144,6 +144,8 @@ def test():
         k = dag.Node(random_key(), random.choice(clus), node_data={})
         k.style().set_attribute('fill_color', color, 'normal')
         k.style().set_attribute('pen_color', color, 'normal')
+        k.style().set_attribute(
+            'shape', random.choice(['rect', 'round']), '_all_states_')
         digraph.add_node(k)
         n.append(k)
 

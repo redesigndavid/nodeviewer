@@ -7,7 +7,7 @@ from PyQt4.QtCore import *
 if not hasattr(Qt, 'MiddleButton'):
     Qt.MiddleButton = Qt.MidButton
 
-_layers = {'edges': 1,
+_layers = {'edges': 10,
            'nodes': 2}
 
 
@@ -39,38 +39,53 @@ class ArrowLine(QGraphicsPathItem):
         bez_p2 = self._points[2]
         p2 = self._points[3]
 
-        pen_width = self.style().get_value('line_width', self._state)
+        # calculate
+        self.distance = math.hypot(p1.x() - p2.x(), p1.y() - p2.y())
+        quarter = (self.distance / -2)
+        arrow_width = self.style().get_value('arrow_width', self._state)
 
-        self.distance = math.hypot(p1.x() - p2.x(),
-                                   p1.y() - p2.y())
-        quarter = (self.distance / -3)
+        stroker = QPainterPathStroker()
+        stroker.setWidth(1)
+
+        src_shape = QPainterPath(self._dag_edge._src.ui()._path)
+        src_shape.translate(QPointF(p1))
+        src_shape = stroker.createStroke(src_shape)
+        self.src_shape = QPainterPath(src_shape)
+
+        line_shape = QPainterPath(p1)
+        line_shape.lineTo((bez_p1 * quarter) + p1)
+        line_shape = stroker.createStroke(line_shape)
+
+        intersection = line_shape.intersected(
+            src_shape).toFillPolygon().boundingRect().center()
+        self.collide = line_shape.intersected(
+            src_shape).toFillPolygon().boundingRect()
 
         s_line = QLineF(p1, (bez_p1 * quarter) + p1)
         angle = math.acos(s_line.dx() / (s_line.length() + 0.00))
         if s_line.dy() >= 0:
             angle = (math.pi * 2.0) - angle
 
-        s_line_vec = (s_line.p2() - s_line.p1())
+        s_line_vec = (s_line.p2() - intersection)
         s_line_length = math.hypot(s_line_vec.x(), s_line_vec.y())
-        offset = (s_line_vec / s_line_length) * 6
-        arrow_size = pen_width * 4
-        c_offset = (s_line_vec / s_line_length) * (6 + (2 * pen_width))
-        arrowP1 = s_line.p1() + offset + QPointF(
-            math.sin(angle + math.pi / 3.0) * arrow_size,
-            math.cos(angle + math.pi / 3.0) * arrow_size)
+        offset = (s_line_vec / s_line_length) * 2
 
-        arrowP2 = s_line.p1() + offset + QPointF(
-            math.sin(angle + math.pi - math.pi / 3.0) * arrow_size,
-            math.cos(angle + math.pi - math.pi / 3.0) * arrow_size)
+        arrowP1 = intersection  + QPointF(
+            math.sin(angle + math.pi / 3.0) * arrow_width,
+            math.cos(angle + math.pi / 3.0) * arrow_width)
 
-        self.curve_line = QPainterPath(p1 + c_offset)
+        arrowP2 = intersection  + QPointF(
+            math.sin(angle + math.pi - math.pi / 3.0) * arrow_width,
+            math.cos(angle + math.pi - math.pi / 3.0) * arrow_width)
+
+        self.curve_line = QPainterPath((arrowP1 + arrowP2) * 0.5)
         self.curve_line.cubicTo(
             (bez_p1 * quarter) + p1,
             (bez_p2 * quarter) + p2,
             p2)
 
         self.arrow_head = QPolygonF()
-        for point in [s_line.p1() + offset, arrowP1, arrowP2]:
+        for point in [intersection + offset, arrowP1, arrowP2]:
             self.arrow_head.append(point)
 
         stroker = QPainterPathStroker()
@@ -99,6 +114,11 @@ class ArrowLine(QGraphicsPathItem):
         painter.setPen(pen)
         painter.setBrush(QColor(*color))
         painter.drawPolygon(self.arrow_head)
+
+        painter.setBrush(QColor(0,0,0,200))
+        painter.drawRect(self.collide)
+        painter.setBrush(QColor(0,255,0,200))
+        painter.drawPath(self.src_shape)
 
     def hoverMoveEvent(self, event):
         self._state = 'hover'
@@ -138,15 +158,19 @@ class Node(QGraphicsPathItem):
         size = self.style().get_value('size', self._state)
         if not isinstance(size, list):
             size = [size, size]
+
         pen_width = self.style().get_value('line_width', self._state)
         shape = self.style().get_value('shape', self._state)
+
         box = QRectF(
             size[0] * -0.5,
             size[1] * -0.5,
             size[0],
             size[1])
+
         if shape == 'round':
-            self._path = QPainterPath(self.pos())
+            self._path = QPainterPath()
+            self._path.arcMoveTo(box, 0)
             self._path.arcTo(box, 0, 360)
         elif shape == 'rect':
             self._path = QPainterPath(self.pos())
@@ -154,7 +178,7 @@ class Node(QGraphicsPathItem):
 
         stroker = QPainterPathStroker()
         stroker.setJoinStyle(Qt.MiterJoin)
-        stroker.setWidth(2 + pen_width)  # used as for click detection
+        stroker.setWidth(pen_width)  # used as for click detection
         stroke_path = stroker.createStroke(self._path)
         stroke_path.addPolygon(self._path.toFillPolygon())
         self.setPath(stroke_path)
@@ -178,15 +202,6 @@ class Node(QGraphicsPathItem):
     def setPos(self, x, y):
         super(Node, self).setPos(x, y)
         self._dag_node.set_pos([x, y])
-
-    def boundingRect(self):
-        pen_width = self.style().get_value('line_width', self._state)
-        factor = 0.5 * pen_width
-        return QRectF(
-            -5 - factor,
-            -5 - factor,
-            10 + (2 * factor),
-            10 + (2 * factor))
 
     def hoverMoveEvent(self, event):
         self._state = 'hover'
@@ -476,8 +491,8 @@ def seperate_normals(normals, repel=None):
                     other_norms.append(repel)
             oxs = sum([other_norm[0] for other_norm in other_norms])
             oys = sum([other_norm[1] for other_norm in other_norms])
-            temp_vec = [org_norms[edge][0] - ((oxs / len(other_norms))*0.80),
-                        org_norms[edge][1] - ((oys / len(other_norms))*0.80)]
+            temp_vec = [org_norms[edge][0] - ((oxs / len(other_norms))*0.20),
+                        org_norms[edge][1] - ((oys / len(other_norms))*0.20)]
             temp_vec_length = math.hypot(temp_vec[0], temp_vec[1])
             if not temp_vec_length:
                 continue
