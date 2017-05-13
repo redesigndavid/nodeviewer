@@ -1,9 +1,9 @@
 import copy
 _all_states = '_all_states_'
 _states = [
-        'normal', 'hover', 'selected',
-        'click', 'inherit_selected',
-        'consider_selection']
+    'normal', 'hover', 'selected',
+    'click', 'inherit_selected',
+    'consider_selection']
 
 _global_defaults = {
     'node_fill_color': {
@@ -76,7 +76,11 @@ class Style():
 
 
 class NodeStyle(Style):
+
     _defaults = Style()
+
+    _defaults.set_attribute('shape', 'rect', _all_states)
+    _defaults.set_attribute('size', [10, 20], _all_states)
 
     _defaults.set_attribute('fill_color', (255, 0, 0, 255), _all_states)
     _defaults.set_attribute('pen_color', (0, 0, 0, 255), _all_states)
@@ -86,11 +90,11 @@ class NodeStyle(Style):
     _defaults.set_attribute('font_color', (0, 0, 0, 255), _all_states)
 
     _defaults.set_attribute(
-            'fill_color', (255, 205, 205, 255),
-            'consider_selection')
+        'fill_color', (255, 205, 205, 255),
+        'consider_selection')
     _defaults.set_attribute(
-            'pen_color', (255, 205, 205, 255),
-            'consider_selection')
+        'pen_color', (255, 205, 205, 255),
+        'consider_selection')
 
     _defaults.set_attribute('fill_color', (255, 255, 255, 255), 'selected')
     _defaults.set_attribute('pen_color', (255, 255, 255, 255), 'selected')
@@ -103,21 +107,23 @@ class NodeStyle(Style):
 
 
 class EdgeStyle(Style):
+
     _defaults = Style()
+
+    _defaults.set_attribute('arrow_width', 8, _all_states)
 
     _defaults.set_attribute('pen_color', (0, 0, 0, 255), _all_states)
     _defaults.set_attribute('line_width', 2, _all_states)
     _defaults.set_attribute('pen_color', (0, 0, 0, 255), 'normal')
     _defaults.set_attribute('pen_color', (255, 255, 255, 255), 'selected')
     _defaults.set_attribute(
-            'pen_color',
-            (155, 155, 255, 255),
-            'inherit_selected')
+        'pen_color',
+        (155, 155, 255, 255),
+        'inherit_selected')
     _defaults.set_attribute(
-            'pen_color', (255, 205, 205, 255),
-            'consider_selection')
+        'pen_color', (255, 205, 205, 255),
+        'consider_selection')
 
     _defaults.set_attribute('pen_color', (120, 255, 255, 255), 'hover')
     _defaults.set_attribute('pen_color', (255, 255, 255, 255), 'click')
     _defaults.set_attribute('line_style', 'solid', _all_states)
-

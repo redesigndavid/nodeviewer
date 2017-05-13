@@ -115,7 +115,7 @@ class ArrowLine(QGraphicsPathItem):
         self.update()
 
 
-class Node(QGraphicsItem):
+class Node(QGraphicsPathItem):
     def __init__(self, node_view, node, node_style=None, *args, **kwargs):
         super(Node, self).__init__(*args, **kwargs)
         self._node_view = node_view
@@ -131,6 +131,33 @@ class Node(QGraphicsItem):
         self.setFlag(QGraphicsItem.ItemIsSelectable)
         self.setZValue(_layers.get('nodes'))
         self.setCacheMode(QGraphicsItem.NoCache)
+        self._circle = None
+        self.make_shape()
+
+    def make_shape(self):
+        size = self.style().get_value('size', self._state)
+        if not isinstance(size, list):
+            size = [size, size]
+        pen_width = self.style().get_value('line_width', self._state)
+        shape = self.style().get_value('shape', self._state)
+        box = QRectF(
+            size[0] * -0.5,
+            size[1] * -0.5,
+            size[0],
+            size[1])
+        if shape == 'round':
+            self._path = QPainterPath(self.pos())
+            self._path.arcTo(box, 0, 360)
+        elif shape == 'rect':
+            self._path = QPainterPath(self.pos())
+            self._path.addRect(box)
+
+        stroker = QPainterPathStroker()
+        stroker.setJoinStyle(Qt.MiterJoin)
+        stroker.setWidth(2 + pen_width)  # used as for click detection
+        stroke_path = stroker.createStroke(self._path)
+        stroke_path.addPolygon(self._path.toFillPolygon())
+        self.setPath(stroke_path)
 
     def style(self):
         return self._dag_node._style
@@ -142,10 +169,11 @@ class Node(QGraphicsItem):
 
         pen = QPen(QColor(*pen_color))
         pen.setWidth(pen_width)
+        pen.setJoinStyle(Qt.MiterJoin)
         painter.setPen(pen)
         painter.setBrush(QColor(*fill_color))
 
-        painter.drawEllipse(QRectF(-5, -5, 10, 10))
+        painter.drawPath(self._path)
 
     def setPos(self, x, y):
         super(Node, self).setPos(x, y)
@@ -252,6 +280,7 @@ class NodeViewer(QGraphicsView):
         self.scene.addLine(0, 0, 0, 10)
         self.scene.addLine(0, 0, 10, 0)
         self.inherit_selection = []
+        self._last_selected = []
 
     def _quick_selection_changed(self):
         selected_items = self.scene.selectedItems()
@@ -261,19 +290,22 @@ class NodeViewer(QGraphicsView):
 
     def _selection_changed(self):
         selected_items = self.scene.selectedItems()
+        modifiers = QApplication.keyboardModifiers()
+        if modifiers == Qt.ShiftModifier:
+            selected_items.extend(self._last_selected)
 
         selected_nodes = [
-                node for node in self._nodes.values() if node in
-                selected_items]
+            node for node in self._nodes.values() if node in
+            selected_items]
         selected_boxes = [
-                node for node in self._boxes.values() if node in
-                selected_items]
+            node for node in self._boxes.values() if node in
+            selected_items]
 
         selected_nodes += selected_boxes
 
         selected_edges = [
-                node for node in self._edges.values() if node in
-                selected_items]
+            node for node in self._edges.values() if node in
+            selected_items]
 
         if selected_nodes:
             for edge in selected_edges:
@@ -289,6 +321,9 @@ class NodeViewer(QGraphicsView):
             for edge in item._dag_node.iter_edges():
                 self.inherit_selection.append(edge.ui())
 
+        for item in selected_items:
+            item.setSelected(True)
+
         for item in (self._nodes.values()
                      + self._edges.values()
                      + self._boxes.values()):
@@ -298,6 +333,9 @@ class NodeViewer(QGraphicsView):
                 item._state = 'inherit_selected'
             else:
                 item._state = 'normal'
+
+        self._last_selected = self.scene.selectedItems()
+
         self.update_lines()
 
     def mousePressEvent(self, event):
