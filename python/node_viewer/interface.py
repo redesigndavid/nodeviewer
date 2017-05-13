@@ -46,12 +46,7 @@ class ArrowLine(QGraphicsPathItem):
 
         stroker = QPainterPathStroker()
         stroker.setWidth(1)
-        try:
-            dst_shape = QPainterPath(self._dag_edge._dst.ui()._path)
-        except:
-            from PyQt4.QtCore import pyqtRemoveInputHook;
-            pyqtRemoveInputHook();
-            import pdb;pdb.set_trace();
+        dst_shape = QPainterPath(self._dag_edge._dst.ui()._path)
         dst_shape.translate(QPointF(p1))
         dst_shape = stroker.createStroke(dst_shape)
         # self.dst_shape = QPainterPath(dst_shape)
@@ -74,22 +69,22 @@ class ArrowLine(QGraphicsPathItem):
         s_line_length = math.hypot(s_line_vec.x(), s_line_vec.y())
         offset = (s_line_vec / s_line_length) * 2
 
-        arrowP1 = intersection  + QPointF(
+        arrow_p1 = intersection + QPointF(
             math.sin(angle + math.pi / 3.0) * arrow_width,
             math.cos(angle + math.pi / 3.0) * arrow_width)
 
-        arrowP2 = intersection + QPointF(
+        arrow_p2 = intersection + QPointF(
             math.sin(angle + math.pi - math.pi / 3.0) * arrow_width,
             math.cos(angle + math.pi - math.pi / 3.0) * arrow_width)
 
-        self.curve_line = QPainterPath((arrowP1 + arrowP2) * 0.5)
+        self.curve_line = QPainterPath((arrow_p1 + arrow_p2) * 0.5)
         self.curve_line.cubicTo(
             (bez_p1 * quarter) + p1,
             (bez_p2 * quarter) + p2,
             p2)
 
         self.arrow_head = QPolygonF()
-        for point in [intersection + offset, arrowP1, arrowP2]:
+        for point in [intersection + offset, arrow_p1, arrow_p2]:
             self.arrow_head.append(point)
 
         stroker = QPainterPathStroker()
@@ -307,33 +302,37 @@ class NodeViewer(QGraphicsView):
         for item in selected_items:
             item._state = 'consider_selection'
 
+    def _get_selected_boxnodes(self):
+        self._selected_boxnodes = [
+            item for item in self.scene.selectedItems()
+            if isinstance(item, (Node, Box))]
+        return self._selected_boxnodes
+
+    def _get_selected_edges(self):
+        selected_nodes = self._selected_boxnodes
+        selected_edges = []
+        for edge in self._edges.values():
+
+            if edge.isSelected():
+                if selected_nodes:
+                    edge.setSelected(False)
+                else:
+                    selected_edges.append(edge)
+        return selected_edges
+
     def _selection_changed(self):
         selected_items = self.scene.selectedItems()
         modifiers = QApplication.keyboardModifiers()
+
         if modifiers == Qt.ShiftModifier:
             selected_items.extend(self._last_selected)
 
-        selected_nodes = [
-            node for node in self._nodes.values() if node in
-            selected_items]
-        selected_boxes = [
-            node for node in self._boxes.values() if node in
-            selected_items]
-
-        selected_nodes += selected_boxes
-
-        selected_edges = [
-            node for node in self._edges.values() if node in
-            selected_items]
-
-        if selected_nodes:
-            for edge in selected_edges:
-                edge.setSelected(False)
+        selected_nodes = self._get_selected_boxnodes()
+        selected_edges = self._get_selected_edges()
 
         iter_items = selected_nodes or selected_edges
 
         self.inherit_selection = []
-
         for item in iter_items:
             if isinstance(item, ArrowLine):
                 continue
@@ -343,9 +342,10 @@ class NodeViewer(QGraphicsView):
         for item in selected_items:
             item.setSelected(True)
 
-        for item in (self._nodes.values()
+        all_items = (self._nodes.values()
                      + self._edges.values()
-                     + self._boxes.values()):
+                     + self._boxes.values())
+        for item in all_items:
             if item in iter_items:
                 item._state = 'selected'
             elif item in self.inherit_selection:
@@ -510,5 +510,4 @@ def seperate_normals(normals, repel=None):
                              temp_vec[1] / temp_vec_length]
 
         org_norms.update(normals)
-
     return org_norms

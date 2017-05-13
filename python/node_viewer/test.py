@@ -5,7 +5,6 @@ from node_viewer import style
 import random
 
 
-
 _default_node_modes = {
     'normal': {
         'fill': (0, 250, 0, 255),
@@ -60,14 +59,14 @@ def rand_key():
 _test_data = {
     'nodes': {
         'defg': {'name': 'Asterisk *',
-              'modes': _default_node_modes,
-              'tooltip': '*'},
+                 'modes': _default_node_modes,
+                 'tooltip': '*'},
         'bcde': {'name': 'Bang !',
-              'modes': _default_node_modes,
-              'tooltip': '!'},
+                 'modes': _default_node_modes,
+                 'tooltip': '!'},
         'abcd': {'name': 'Comma ,',
-              'modes': _default_node_modes,
-              'tooltip': ','},
+                 'modes': _default_node_modes,
+                 'tooltip': ','},
     },
     'connections': {
         ('defg', 'bcde'): {'modes': _default_line_modes, 'weight': 1},
@@ -135,7 +134,7 @@ def test():
             nm += random.choice('abcdefghijklmnopqrstuvwxyz')
         return nm
 
-    for i in range(330):
+    for i in range(300):
         color = [
             random.random() * 5,
             (random.random() * 150) + 55,
@@ -178,19 +177,19 @@ def test():
     for i in range(5):
         e = dag.Edge(b.get_port('s', i), random.choice(n), 100)
         e.style().set_attribute('line_style', 'dash', style._all_states)
-        e.style().set_attribute('pen_color', [251,250,250, 255], 'normal')
+        e.style().set_attribute('pen_color', [251, 250, 250, 255], 'normal')
         digraph.add_edge(e)
 
     for i in range(3):
         e = dag.Edge(random.choice(n), random.choice(b.get_ports()))
         e.style().set_attribute('line_style', 'dot', style._all_states)
-        e.style().set_attribute('pen_color', [251,250,250, 255], 'normal')
+        e.style().set_attribute('pen_color', [251, 250, 250, 255], 'normal')
         digraph.add_edge(e)
 
     for i in range(3):
         e = dag.Edge(b.get_port('e', 0), random.choice(n))
         e.style().set_attribute('line_style', 'dot', style._all_states)
-        e.style().set_attribute('pen_color', [250,250,250, 255], 'normal')
+        e.style().set_attribute('pen_color', [250, 250, 250, 255], 'normal')
         digraph.add_edge(e)
     digraph.process_dot()
 
