@@ -165,8 +165,8 @@ def test():
             e.style().set_attribute('line_width', 2 + (random.random() * 3), 'normal')
             digraph.add_edge(e)
 
-    b = dag.Box('sample_box', (500, 800),
-                {'n': 3, 's': 5, 'w': 4, 'e': 5},
+    b = dag.Box('sample_box', (50, 80),
+                {'n': 2, 's': 2, 'w': 3, 'e': 2},
                 random.choice(clus),
                 box_data={})
     color = [200, 200, 150, 255]
@@ -174,19 +174,19 @@ def test():
     b.style().set_attribute('pen_color',  color, 'normal')
     digraph.add_box(b)
 
-    for i in range(5):
-        e = dag.Edge(b.get_port('s', i), random.choice(n), 100)
+    for i in range(3):
+        e = dag.Edge(b.get_port('w', i), random.choice(n), 100)
         e.style().set_attribute('line_style', 'dash', style._all_states)
         e.style().set_attribute('pen_color', [251, 250, 250, 255], 'normal')
         digraph.add_edge(e)
 
-    for i in range(3):
+    for i in range(2):
         e = dag.Edge(random.choice(n), random.choice(b.get_ports()))
         e.style().set_attribute('line_style', 'dot', style._all_states)
         e.style().set_attribute('pen_color', [251, 250, 250, 255], 'normal')
         digraph.add_edge(e)
 
-    for i in range(3):
+    for i in range(2):
         e = dag.Edge(b.get_port('e', 0), random.choice(n))
         e.style().set_attribute('line_style', 'dot', style._all_states)
         e.style().set_attribute('pen_color', [250, 250, 250, 255], 'normal')

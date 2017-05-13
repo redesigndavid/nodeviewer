@@ -80,10 +80,10 @@ class NodeStyle(Style):
     _defaults = Style()
 
     _defaults.set_attribute('shape', 'round', _all_states)
-    _defaults.set_attribute('size', [10, 20], _all_states)
+    _defaults.set_attribute('size', [10, 10], _all_states)
 
     _defaults.set_attribute('fill_color', (255, 0, 0, 255), _all_states)
-    _defaults.set_attribute('pen_color', (0, 0, 0, 255), _all_states)
+    _defaults.set_attribute('pen_color', (255, 0, 0, 255), _all_states)
     _defaults.set_attribute('line_width', 2, _all_states)
 
     _defaults.set_attribute('font_size', 10, _all_states)

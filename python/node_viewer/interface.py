@@ -7,14 +7,19 @@ from PyQt4.QtCore import *
 if not hasattr(Qt, 'MiddleButton'):
     Qt.MiddleButton = Qt.MidButton
 
-_layers = {'edges': 1,
-           'nodes': 2}
+_layers = {'edges': 2,
+           'ports': 4,
+           'boxes': 1,
+           'nodes': 3}
 
 
 class ArrowLine(QGraphicsPathItem):
+
+    z_value = _layers.get('edges')
+
     def __init__(self, node_view, edge, edge_style=None, *args, **kwargs):
         super(QGraphicsPathItem, self).__init__(*args, **kwargs)
-        self.setZValue(_layers.get('edges'))
+        self.setZValue(self.z_value)
         self.setAcceptsHoverEvents(True)
         self.setCacheMode(QGraphicsItem.NoCache)
         self.setFlag(QGraphicsItem.ItemIsSelectable)
@@ -44,19 +49,23 @@ class ArrowLine(QGraphicsPathItem):
         quarter = (self.distance / -2)
         arrow_width = self.style().get_value('arrow_width', self._state)
 
-        stroker = QPainterPathStroker()
-        stroker.setWidth(1)
-        dst_shape = QPainterPath(self._dag_edge._dst.ui()._path)
-        dst_shape.translate(QPointF(p1))
-        dst_shape = stroker.createStroke(dst_shape)
-        # self.dst_shape = QPainterPath(dst_shape)
+        if isinstance(self._dag_edge._dst.ui(), Box):
+            intersection = QPointF(*self._dag_edge._dst.ui_pos())
+        else:
+            stroker = QPainterPathStroker()
+            stroker.setWidth(1)
+            dst_shape = QPainterPath(self._dag_edge._dst.ui()._path)
+            dst_shape.translate(QPointF(p1))
+            dst_shape = stroker.createStroke(dst_shape)
+            # self.dst_shape = QPainterPath(dst_shape)
 
-        line_shape = QPainterPath(p1)
-        line_shape.lineTo((bez_p1 * quarter) + p1)
-        line_shape = stroker.createStroke(line_shape)
+            line_shape = QPainterPath(p1)
+            line_shape.lineTo((bez_p1 * quarter) + p1)
+            line_shape = stroker.createStroke(line_shape)
 
-        intersection = line_shape.intersected(
-            dst_shape).toFillPolygon().boundingRect().center()
+            intersection = line_shape.intersected(
+                dst_shape).toFillPolygon().boundingRect().center()
+
         # self.collide = line_shape.intersected(
         #     dst_shape).toFillPolygon().boundingRect()
 
@@ -134,7 +143,11 @@ class ArrowLine(QGraphicsPathItem):
         self.update()
 
 
-class Node(QGraphicsPathItem):
+class Node(QGraphicsPathItem, object):
+
+    movable = True
+    z_value = _layers.get('nodes')
+
     def __init__(self, node_view, node, node_style=None, *args, **kwargs):
         super(Node, self).__init__(*args, **kwargs)
         self._node_view = node_view
@@ -146,9 +159,10 @@ class Node(QGraphicsPathItem):
         self._dag_node.set_ui(self)
 
         self.setAcceptsHoverEvents(True)
-        self.setFlag(QGraphicsItem.ItemIsMovable)
         self.setFlag(QGraphicsItem.ItemIsSelectable)
-        self.setZValue(_layers.get('nodes'))
+        if self.movable:
+            self.setFlag(QGraphicsItem.ItemIsMovable)
+        self.setZValue(self.z_value)
         self.setCacheMode(QGraphicsItem.NoCache)
         self._circle = None
         self.make_shape()
@@ -239,7 +253,40 @@ class Node(QGraphicsPathItem):
         self._node_view.update_lines(nodes, fast=False)
 
 
+class Port(Node):
+
+    movable = False
+    z_value = _layers.get('ports')
+
+    def update_pos(self):
+        self.setPos(*self._dag_node.ui_pos())
+
+
 class Box(Node):
+
+    z_value = _layers.get('boxes')
+
+    def make_shape(self):
+        dim = self._dag_node._dim
+        dim = [dim[0] * 0.5, dim[1] * 0.5]
+        pen_width = self.style().get_value('line_width', self._state)
+
+        box = QRectF(
+            dim[0] * -0.5,
+            dim[1] * -0.5,
+            dim[0],
+            dim[1])
+
+        self._path = QPainterPath(self.pos())
+        self._path.addRect(box)
+
+        stroker = QPainterPathStroker()
+        stroker.setJoinStyle(Qt.MiterJoin)
+        stroker.setWidth(pen_width)  # used as for click detection
+        stroke_path = stroker.createStroke(self._path)
+        stroke_path.addPolygon(self._path.toFillPolygon())
+        self.setPath(stroke_path)
+
     def paint(self, painter, *args, **kwargs):
         fill_color = self.style().get_value('fill_color', self._state)
         pen_color = self.style().get_value('pen_color', self._state)
@@ -250,18 +297,7 @@ class Box(Node):
         painter.setPen(pen)
         painter.setBrush(QColor(*fill_color))
 
-        dim = self._dag_node._dim
-        dim = [dim[0] * 0.5, dim[1] * 0.5]
-        painter.drawRect(QRectF(
-            -0.5 * dim[0], -0.5 * dim[1],
-            dim[0], dim[1]))
-
-    def boundingRect(self):
-        dim = self._dag_node._dim
-        dim = [dim[0] * 0.5, dim[1] * 0.5]
-        return QRectF(
-            -0.5 * dim[0], -0.5 * dim[1],
-            dim[0], dim[1])
+        painter.drawPath(self._path)
 
     def mouseMoveEvent(self, event):
         QGraphicsItem.mouseMoveEvent(self, event)
@@ -272,7 +308,9 @@ class Box(Node):
             node._dag_node
             for node in self._node_view.scene.selectedItems()
             if hasattr(node, '_dag_node')]
-        ports = [port for port in self._dag_node.get_ports()]
+        ports = self._dag_node.get_ports()
+        for port in ports:
+            port.ui().update_pos()
         nodes.extend(ports)
         self._node_view.update_lines(nodes, fast=True)
 
@@ -419,6 +457,7 @@ class NodeViewer(QGraphicsView):
         self._nodes = {}
         self._boxes = {}
         self._edges = {}
+        self._ports = {}
         self._node_edges = {}
         self._outgoing = {}
         self._ingoing = {}
@@ -434,6 +473,11 @@ class NodeViewer(QGraphicsView):
             box.setPos(*[10 * x for x in data.get_pos()])
             self.scene.addItem(box)
             self._boxes[bkey] = box
+            for dag_port in box._dag_node.get_ports():
+                port = Port(self, dag_port)
+                self.scene.addItem(port)
+                self._ports[dag_port.conn_key()] = port
+                port.setPos(*dag_port.ui_pos())
 
         for edge_key, edge in self._graph.iter_edges():
             gline = ArrowLine(self, edge)

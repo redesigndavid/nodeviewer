@@ -130,12 +130,24 @@ class Port():
         self._box_key = box.key()
         self._d = d
         self._idx = idx
-        self._ui = box._ui
+        self._ui = None
+        self._style = style.NodeStyle()
         self._repeller = {
             'n': [0, -1],
             's': [0, 1],
             'e': [1, 0],
             'w': [-1, 0]}[self._d]
+
+    def set_pos(self, *args, **kwargs):
+        pass
+
+    @memoize
+    def iter_edge_connections(self):
+        edge_connections = set([])
+        for edge in self.iter_edges():
+            edge_connections.add(edge._src)
+            edge_connections.add(edge._dst)
+        return list(edge_connections)
 
     def calc_pos(self):
         '''calculate port position based on box dimensions'''
@@ -173,8 +185,6 @@ class Port():
         self._ui = item
 
     def ui(self):
-        if not self._ui:
-            return self._box.ui()
         return self._ui
 
     @memoize
