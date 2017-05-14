@@ -219,7 +219,9 @@ class Node(QGraphicsPathItem, object):
         self.make_label()
 
     def make_label(self):
+        label_alignment = self.style().get_value('label_alignment', self._state)
         self.node_label = Label(self)
+        self.node_label.set_label_alignment(label_alignment)
         self.node_label.set_text(self._dag_node.label())
 
     def make_shape(self):
@@ -543,6 +545,14 @@ class NodeViewer(QGraphicsView):
             self._boxes[bkey] = box
             for dag_port in box._dag_node.get_ports():
                 port = Port(self, dag_port)
+                if dag_port._d == 'n':
+                    port.node_label.set_label_alignment('below')
+                elif dag_port._d == 'w':
+                    port.node_label.set_label_alignment('right')
+                elif dag_port._d == 'e':
+                    port.node_label.set_label_alignment('left')
+                elif dag_port._d == 's':
+                    port.node_label.set_label_alignment('above')
                 self.scene.addItem(port)
                 self._ports[dag_port.key()] = port
                 port.setPos(*dag_port.ui_pos())

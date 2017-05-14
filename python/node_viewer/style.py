@@ -88,6 +88,8 @@ class NodeStyle(Style):
     _defaults.set_attribute('font_size', 10, _all_states)
     _defaults.set_attribute('font_color', (0, 0, 0, 255), _all_states)
 
+    _defaults.set_attribute('label_alignment', 'below', _all_states)
+
     _defaults.set_attribute(
         'fill_color', (255, 205, 205, 255),
         'consider_selection')

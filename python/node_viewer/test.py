@@ -5,6 +5,109 @@ from node_viewer import style
 import random
 
 
+_random_titles = [item.strip() for item in """
+Back to the Future
+Desperado
+Night at the Museum
+Robocop
+Ghostbusters
+Cool World
+Donnie Darko
+Double Indemnity
+The Spanish Prisoner
+The Smurfs
+Dead Alive
+Army of Darkness
+Peter Pan
+The Jungle Story
+Red Planet
+Deep Impact
+The Long Kiss Goodnight
+Juno
+(500) Days of Summer
+The Dark Knight
+Bringing Down the House
+Se7en
+Chocolat
+The American
+The American President
+Hudsucker Proxy
+Conan the Barbarian
+Shrek
+The Fox and the Hound
+Lock, Stock, and Two Barrels
+Date Night
+200 Cigarettes
+9 1/2 Weeks
+Iron Man 2
+Tombstone
+Young Guns
+Fight Club
+The Cell
+The Unborn
+Black Christmas
+The Change-Up
+The Last of the Mohicans
+Shutter Island
+Ronin
+Ocean's 11
+Philadelphia
+Chariots of Fire
+M*A*S*H
+Walking and Talking
+Walking Tall
+The 40 Year Old Virgin
+Superman III
+The Hour
+The Slums of Beverly Hills
+Secretary
+Secretariat
+Pretty Woman
+Sleepless in Seattle
+The Iron Mask
+Smoke
+Schindler's List
+The Beverly Hillbillies
+The Ugly Truth
+Bounty Hunter
+Say Anything
+8 Seconds
+Metropolis
+Indiana Jones and the Temple of Doom
+Kramer vs. Kramer
+The Manchurian Candidate
+Raging Bull
+Heat
+About Schmidt
+Re-Animator
+Evolution
+Gone in 60 Seconds
+Wanted
+The Man with One Red Shoe
+The Jerk
+Whip It
+Spanking the Monkey
+Steel Magnolias
+Horton Hears a Who
+Honey
+Brazil
+Gorillas in the Mist
+Before Sunset
+After Dark
+From Dusk til Dawn
+Cloudy with a Chance of Meatballs
+Harvey
+Mr. Smith Goes to Washington
+L.A. Confidential
+Little Miss Sunshine
+The Future
+Howard the Duck
+Howard's End
+The Innkeeper
+Revolutionary Road
+""".splitlines()]
+
+
 _default_node_modes = {
     'normal': {
         'fill': (0, 250, 0, 255),
@@ -127,20 +230,21 @@ def test():
     clus = ['foo']
 
     import random
+    taken = []
 
-    def random_key():
-        nm = ""
-        for _ in range(5):
-            nm += random.choice('abcdefghijklmnopqrstuvwxyz')
-        return nm
+    def random_title():
+        key = None
+        while not key or key in taken:
+            key = random.choice(_random_titles)
+        return key
 
-    for i in range(300):
+    for i in range(90):
         color = [
             random.random() * 5,
             (random.random() * 150) + 55,
             random.random() * 10,
             255]
-        k = dag.Node(random_key(), random.choice(clus), node_data={})
+        k = dag.Node(random_title(), random.choice(clus), node_data={})
         k.style().set_attribute('fill_color', color, 'normal')
         k.style().set_attribute('pen_color', color, 'normal')
         k.style().set_attribute(
@@ -165,14 +269,17 @@ def test():
             e.style().set_attribute('line_width', 2 + (random.random() * 3), 'normal')
             digraph.add_edge(e)
 
-    b = dag.Box('sample_box', (500, 800),
+    b = dag.Box('sample_box', (100, 150),
                 {'n': 0, 's': 1, 'w': 3, 'e': 2},
                 random.choice(clus),
                 box_data={})
     color = [200, 200, 150, 255]
     b.style().set_attribute('fill_color',  color, 'normal')
     b.style().set_attribute('pen_color',  color, 'normal')
+    b.style().set_attribute('label_alignment', 'above', '_all_states_')
     digraph.add_box(b)
+    for port in b.get_ports():
+        port.set_label(random_title())
 
     for i in range(3):
         e = dag.Edge(b.get_port('w', i), random.choice(n), 100)

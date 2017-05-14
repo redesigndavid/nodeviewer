@@ -161,6 +161,9 @@ class Port():
     def label(self):
         return self._label
 
+    def set_label(self, label_text):
+        self._label = label_text
+
     def set_pos(self, *args, **kwargs):
         pass
 
