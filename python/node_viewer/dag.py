@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import uuid
 import subprocess
 import math
 from node_viewer import style
@@ -17,10 +18,25 @@ def memoize(function):
 
     return wrapper
 
+_keys = []
+
+
+def unique_key():
+    import random
+    global _keys
+    key = None
+    while not key or key in _keys:
+        key = ''
+        for i in range(16):
+            key += random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+    _keys.append(key)
+    return key
+
 
 class Node(object):
-    def __init__(self, node_key, rank_family=None, node_data=None):
-        self._node_key = 'node_%s' % node_key
+    def __init__(self, node_label, rank_family=None, node_data=None, uid=None):
+        self._label = node_label
+        self._id = 'node_%s' % (uid or unique_key())
         self._rank_family = rank_family
         self._pos = [0, 0]
         self._node_data = node_data or {}
@@ -57,13 +73,13 @@ class Node(object):
     def iter_edges(self):
         return [self.graph().get_edge(edge_key)
                 for edge_key in
-                self.graph()._node_edges.get(self.conn_key(), [])]
+                self.graph()._node_edges.get(self.key(), [])]
 
     def get_edge_normals(self):
         # gather node's edge's normals
         normals = {}
         for edge in self.iter_edges():
-            is_forwards = (edge._src.conn_key() == self.conn_key())
+            is_forwards = (edge._src.key() == self.key())
             offset = [
                 edge._src.ui_pos()[0] - edge._dst.ui_pos()[0],
                 edge._src.ui_pos()[1] - edge._dst.ui_pos()[1]]
@@ -84,13 +100,13 @@ class Node(object):
 
     @memoize
     def dot_text(self):
-        return "\n%s [width=1 height=1]" % self._node_key
+        return "\n%s [width=1 height=1]" % self._id
 
     def get_pos(self):
         return self._pos
 
-    def conn_key(self):
-        return self._node_key
+    def key(self):
+        return self._id
 
 
 class Edge():
@@ -113,13 +129,13 @@ class Edge():
 
     @memoize
     def key(self):
-        return "%s->%s" % (self._src.conn_key(), self._dst.conn_key())
+        return "%s->%s" % (self._src.key(), self._dst.key())
 
     @memoize
     def dot_text(self):
         return "\n%s" % ("%s -> %s [weight=%s];" % (
-            self._src.conn_key(),
-            self._dst.conn_key(),
+            self._src.key(),
+            self._dst.key(),
             self._weight))
 
 
@@ -178,7 +194,7 @@ class Port():
         return self._pos
 
     @memoize
-    def conn_key(self):
+    def key(self):
         return '"%s":"%s%s"' % (self._box_key, self._d, self._idx)
 
     def set_ui(self, item):
@@ -192,13 +208,13 @@ class Port():
         return [self._box.graph().get_edge(edge_key)
                 for edge_key in
                 self._box.graph()._node_edges.get(
-                    self.conn_key(), [])]
+                    self.key(), [])]
 
     def get_edge_normals(self):
         # gather node's edge's normals
         normals = {}
         for edge in self.iter_edges():
-            is_forwards = (edge._src.conn_key() == self.conn_key())
+            is_forwards = (edge._src.key() == self.key())
             offset = [
                 edge._src.ui_pos()[0] - edge._dst.ui_pos()[0],
                 edge._src.ui_pos()[1] - edge._dst.ui_pos()[1]]
@@ -237,8 +253,8 @@ class Box():
         '</TR>'
         '</TABLE>')
 
-    def __init__(self, n, dim, ports, rank_family=None, box_data=None):
-        self._box_key = 'box_%s' % n
+    def __init__(self, n, dim, ports, rank_family=None, box_data=None, uid=None):
+        self._id = 'box_%s' % (uid or unique_key())
         self._ports = ports
         self._rank_family = rank_family
         self._box_data = box_data or {}
@@ -300,9 +316,6 @@ class Box():
     def graph(self):
         return self._graph
 
-    def conn_key(self):
-        return self._box_key
-
     def set_pos(self, pos):
         self._pos = pos
         for port in self._port_attrs.values():
@@ -313,7 +326,7 @@ class Box():
         return self._pos
 
     def key(self):
-        return self._box_key
+        return self._id
 
     def create_ports(self):
         for d, n in self._ports.items():
@@ -367,7 +380,7 @@ class Box():
             half_height=half_height, w=w, e=e, n=n, s=s)
 
     def dot_text(self):
-        text = "\n%s [shape=plaintext label=<" % (self._box_key)
+        text = "\n%s [shape=plaintext label=<" % (self.key())
         text += self.table_data()
         text += '>];\n'
         return text
@@ -386,17 +399,17 @@ class DiGraph():
 
     def add_box(self, box):
         box.set_graph(self)
-        self._boxes[box._box_key] = box
+        self._boxes[box.key()] = box
 
         for port in box.get_ports():
-            self._ports[port.conn_key()] = port
+            self._ports[port.key()] = port
 
     def add_edge(self, edge):
         if edge.key() in self._edges.keys():
             return
         self._edges[edge.key()] = edge
-        self._node_edges.setdefault(edge._src.conn_key(), set([])).add(edge.key())
-        self._node_edges.setdefault(edge._dst.conn_key(), set([])).add(edge.key())
+        self._node_edges.setdefault(edge._src.key(), set([])).add(edge.key())
+        self._node_edges.setdefault(edge._dst.key(), set([])).add(edge.key())
         self._outgoing.setdefault(edge._src, set([])).add(edge._dst)
         self._ingoing.setdefault(edge._dst, set([])).add(edge._src)
 
@@ -405,7 +418,7 @@ class DiGraph():
 
     def add_node(self, node):
         node.set_graph(self)
-        self._nodes[node._node_key] = node
+        self._nodes[node._id] = node
 
     def get_node(self, node_key):
         if not node_key.startswith('node_'):
@@ -674,7 +687,7 @@ def test():
     same_source_and_end = digraph.find_matching_bookends()
 
     for group in same_source_and_end:
-        print [nod.conn_key() for nod in group]
+        print [nod.key() for nod in group]
 
 
 

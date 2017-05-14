@@ -152,9 +152,8 @@ class Node(QGraphicsPathItem, object):
         super(Node, self).__init__(*args, **kwargs)
         self._node_view = node_view
         self._dag_node = node
-        self._key = node.conn_key()
+        self._key = node.key()
         self._state = 'normal'
-        self._tip = False
 
         self._dag_node.set_ui(self)
 
@@ -476,7 +475,7 @@ class NodeViewer(QGraphicsView):
             for dag_port in box._dag_node.get_ports():
                 port = Port(self, dag_port)
                 self.scene.addItem(port)
-                self._ports[dag_port.conn_key()] = port
+                self._ports[dag_port.key()] = port
                 port.setPos(*dag_port.ui_pos())
 
         for edge_key, edge in self._graph.iter_edges():
@@ -502,7 +501,7 @@ class NodeViewer(QGraphicsView):
             for edge_key, normal in normals.items():
                 edge = self._graph.get_edge(edge_key)
                 line = edge.ui()
-                if edge._dst.conn_key() == node.conn_key():
+                if edge._dst.key() == node.key():
                     line.set_p(0, node.ui_pos())
                     line.set_p(1, normal)
                 else:
