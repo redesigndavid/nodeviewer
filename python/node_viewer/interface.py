@@ -7,10 +7,31 @@ from PyQt4.QtCore import *
 if not hasattr(Qt, 'MiddleButton'):
     Qt.MiddleButton = Qt.MidButton
 
-_layers = {'edges': 2,
+_layers = {'labels': 100,
+           'edges': 2,
            'ports': 4,
            'boxes': 1,
            'nodes': 3}
+
+
+class Label(QGraphicsTextItem):
+    z_value = _layers.get('labels')
+
+    def __init__(self, parent):
+        super(QGraphicsTextItem, self).__init__('', parent)
+        self._parent = parent
+        self.setVisible(False)
+        self.setPos(self._parent.pos())
+        self.setZValue(self.z_value)
+
+    def set_text(self, text):
+        text = '<p style="color:blue;background-color:red">%s</p>' % text
+        self.setHtml(text)
+        p_height = self._parent.boundingRect().height()
+        width = self.boundingRect().width()
+        offset = QPointF(width * -0.5, p_height * 0.5)
+        pos = self._parent.pos() + offset
+        self.setPos(pos)
 
 
 class ArrowLine(QGraphicsPathItem):
@@ -174,6 +195,11 @@ class Node(QGraphicsPathItem, object):
         self.setCacheMode(QGraphicsItem.NoCache)
 
         self.make_shape()
+        self.make_label()
+
+    def make_label(self):
+        self.node_label = Label(self)
+        self.node_label.set_text(self._dag_node.label())
 
     def make_shape(self):
         size = self.style().get_value('size', self._state)
@@ -203,11 +229,6 @@ class Node(QGraphicsPathItem, object):
         stroke_path = stroker.createStroke(self._path)
         stroke_path.addPolygon(self._path.toFillPolygon())
         self.setPath(stroke_path)
-
-        self.node_label = QGraphicsTextItem('', self)
-        self.node_label.setPlainText(self._dag_node.label())
-        self.node_label.setPos(self.pos())
-        self.node_label.setVisible(False)
 
     def update(self):
         state = self.state()
@@ -314,11 +335,6 @@ class Box(Node):
         stroke_path = stroker.createStroke(self._path)
         stroke_path.addPolygon(self._path.toFillPolygon())
         self.setPath(stroke_path)
-
-        self.node_label = QGraphicsTextItem('', self)
-        self.node_label.setHtml('<p style="color:blue;background-color:red;margin:30px">%s</p>' % self._dag_node.label())
-        self.node_label.setPos(self.pos())
-        self.node_label.setTextWidth(100)
 
     def paint(self, painter, *args, **kwargs):
         fill_color = self.style().get_value('fill_color', self.state())
