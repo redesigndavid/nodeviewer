@@ -156,6 +156,10 @@ class Port():
             's': [0, 1],
             'e': [1, 0],
             'w': [-1, 0]}[self._d]
+        self._label = 'port'
+
+    def label(self):
+        return self._label
 
     def set_pos(self, *args, **kwargs):
         pass
@@ -270,6 +274,10 @@ class Box():
         self.set_dim(dim)
         self.create_ports()
         self._style = style.NodeStyle()
+        self._label = 'box'
+
+    def label(self):
+        return self._label
 
     def get_edge_normals(self):
         return {}

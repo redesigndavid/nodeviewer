@@ -63,7 +63,6 @@ class Style():
         if not value and self._defaults:
             value = self._defaults.get_value(attr_name, state)
         if not value:
-            print attr_name, state
             value = _global_defaults.get(attr_name, state)
         return value
 

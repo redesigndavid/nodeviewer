@@ -129,18 +129,27 @@ class ArrowLine(QGraphicsPathItem):
         # painter.drawPath(self.dst_shape)
 
     def hoverMoveEvent(self, event):
-        self._state = 'hover'
+        self.set_state('hover')
         self.update()
 
     def hoverLeaveEvent(self, event):
         inherit_selection = self._node_view.inherit_selection
         if self in inherit_selection:
-            self._state = 'inherit_selected'
+            self.set_state('inherit_selected')
         elif self not in self._node_view.scene.selectedItems():
-            self._state = 'normal'
+            self.set_state('normal')
         else:
-            self._state = 'selected'
+            self.set_state('selected')
         self.update()
+
+    def set_state(self, state, update=True):
+        self._state = state
+        if update:
+            self.update()
+
+    def state(self):
+        return self._state
+
 
 
 class Node(QGraphicsPathItem, object):
@@ -195,17 +204,35 @@ class Node(QGraphicsPathItem, object):
         stroke_path.addPolygon(self._path.toFillPolygon())
         self.setPath(stroke_path)
 
-        self.node_label = QGraphicsTextItem('')
+        self.node_label = QGraphicsTextItem('', self)
         self.node_label.setPlainText(self._dag_node.label())
         self.node_label.setPos(self.pos())
+        self.node_label.setVisible(False)
+
+    def update(self):
+        state = self.state()
+        if state in ('hover', 'selected'):
+            self.node_label.setVisible(True)
+        else:
+            self.node_label.setVisible(False)
+        self.node_label.update()
+        super(Node, self).update()
+
+    def set_state(self, state, update=True):
+        self._state = state
+        if update:
+            self.update()
+
+    def state(self):
+        return self._state
 
     def style(self):
         return self._dag_node._style
 
     def paint(self, painter, *args, **kwargs):
-        fill_color = self.style().get_value('fill_color', self._state)
-        pen_color = self.style().get_value('pen_color', self._state)
-        pen_width = self.style().get_value('line_width', self._state)
+        fill_color = self.style().get_value('fill_color', self.state())
+        pen_color = self.style().get_value('pen_color', self.state())
+        pen_width = self.style().get_value('line_width', self.state())
 
         pen = QPen(QColor(*pen_color))
         pen.setWidth(pen_width)
@@ -215,28 +242,23 @@ class Node(QGraphicsPathItem, object):
 
         painter.drawPath(self._path)
 
-        painter.drawText(self._label)
-
     def setPos(self, x, y):
         super(Node, self).setPos(x, y)
         self._dag_node.set_pos([x, y])
 
     def hoverMoveEvent(self, event):
-        self._state = 'hover'
-        self.update()
+        self.set_state('hover')
 
     def hoverLeaveEvent(self, event):
         if self not in self._node_view.scene.selectedItems():
-            self._state = 'normal'
+            self.set_state('normal')
         else:
-            self._state = 'selected'
-        self.update()
+            self.set_state('selected')
 
     def mousePressEvent(self, event):
         QGraphicsItem.mousePressEvent(self, event)
         if self in self._node_view.scene.selectedItems():
-            self._state = 'selected'
-        self.update()
+            self.set_state('selected')
 
     def mouseMoveEvent(self, event):
         QGraphicsItem.mouseMoveEvent(self, event)
@@ -274,7 +296,8 @@ class Box(Node):
     def make_shape(self):
         dim = self._dag_node._dim
         dim = [dim[0] * 0.5, dim[1] * 0.5]
-        pen_width = self.style().get_value('line_width', self._state)
+        print 'state==',self.state()
+        pen_width = self.style().get_value('line_width', self.state())
 
         box = QRectF(
             dim[0] * -0.5,
@@ -292,10 +315,15 @@ class Box(Node):
         stroke_path.addPolygon(self._path.toFillPolygon())
         self.setPath(stroke_path)
 
+        self.node_label = QGraphicsTextItem('', self)
+        self.node_label.setHtml('<p style="color:blue;background-color:red;margin:30px">%s</p>' % self._dag_node.label())
+        self.node_label.setPos(self.pos())
+        self.node_label.setTextWidth(100)
+
     def paint(self, painter, *args, **kwargs):
-        fill_color = self.style().get_value('fill_color', self._state)
-        pen_color = self.style().get_value('pen_color', self._state)
-        pen_width = self.style().get_value('line_width', self._state)
+        fill_color = self.style().get_value('fill_color', self.state())
+        pen_color = self.style().get_value('pen_color', self.state())
+        pen_width = self.style().get_value('line_width', self.state())
 
         pen = QPen(QColor(*pen_color))
         pen.setWidth(pen_width)
@@ -343,7 +371,7 @@ class NodeViewer(QGraphicsView):
         selected_items = self.scene.selectedItems()
 
         for item in selected_items:
-            item._state = 'consider_selection'
+            item.set_state('consider_selection')
 
     def _get_selected_boxnodes(self):
         self._selected_boxnodes = [
@@ -390,11 +418,11 @@ class NodeViewer(QGraphicsView):
                      + self._boxes.values())
         for item in all_items:
             if item in iter_items:
-                item._state = 'selected'
+                item.set_state('selected')
             elif item in self.inherit_selection:
-                item._state = 'inherit_selected'
+                item.set_state('inherit_selected')
             else:
-                item._state = 'normal'
+                item.set_state('normal')
 
         self._last_selected = self.scene.selectedItems()
 

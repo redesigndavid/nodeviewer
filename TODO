@@ -12,9 +12,10 @@ DONE 12. port positions as nodes
 DONE 13. port reposition with box
 DONE 14. fix no ports, also fixed port positions
 DONE 15. fixed conn key
+DONE 3. labels
 
 9. add more shapes diamond, hexagon, star
 5. and onclick show details
 6. keyboard short cuts
-3. labels
 11. lower complexity 
+16. prettify labels with styles
