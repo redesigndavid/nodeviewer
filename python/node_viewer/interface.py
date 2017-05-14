@@ -15,6 +15,7 @@ _layers = {'labels': 100,
 
 
 class Label(QGraphicsTextItem):
+
     z_value = _layers.get('labels')
 
     def __init__(self, parent):
@@ -23,15 +24,47 @@ class Label(QGraphicsTextItem):
         self.setVisible(False)
         self.setPos(self._parent.pos())
         self.setZValue(self.z_value)
+        import random
+        self._label_alignment = random.choice(
+            ['above', 'below', 'middle', 'left', 'right'])
+
+    def set_label_alignment(self, alignment):
+        self._label_alignment = alignment
+        self.update_pos()
 
     def set_text(self, text):
-        text = '<p style="color:blue;background-color:red">%s</p>' % text
+        text = '<p style="color:white">%s</p>' % text
         self.setHtml(text)
+        self.update_pos()
+
+    def update_pos(self):
         p_height = self._parent.boundingRect().height()
+        p_width = self._parent.boundingRect().width()
         width = self.boundingRect().width()
-        offset = QPointF(width * -0.5, p_height * 0.5)
+        height = self.boundingRect().height()
+        if self._label_alignment == 'below':
+            offset = QPointF(width * -0.5, p_height * 0.5)
+        elif self._label_alignment == 'above':
+            offset = QPointF(width * -0.5, (p_height * -0.5) + (height * -1))
+        elif self._label_alignment == 'middle':
+            offset = QPointF(width * -0.5, height * -0.5)
+        elif self._label_alignment == 'left':
+            offset = QPointF((p_width * -0.5) + (width * -1), height * -0.5)
+        elif self._label_alignment == 'right':
+            offset = QPointF((p_width * 0.5), height * -0.5)
         pos = self._parent.pos() + offset
         self.setPos(pos)
+
+    def paint(self, painter, *args, **kwargs):
+
+        pen = QPen(QColor(255, 0, 0, 255))
+        pen.setWidth(2)
+        pen.setJoinStyle(Qt.MiterJoin)
+        painter.setPen(pen)
+        painter.setBrush(QColor(0, 0, 0, 255))
+        painter.drawRect(self.boundingRect())
+
+        super(Label, self).paint(painter, *args, **kwargs)
 
 
 class ArrowLine(QGraphicsPathItem):
@@ -78,7 +111,6 @@ class ArrowLine(QGraphicsPathItem):
             dst_shape = QPainterPath(self._dag_edge._dst.ui()._path)
             dst_shape.translate(QPointF(p1))
             dst_shape = stroker.createStroke(dst_shape)
-            # self.dst_shape = QPainterPath(dst_shape)
 
             line_shape = QPainterPath(p1)
             line_shape.lineTo((bez_p1 * quarter) + p1)
@@ -86,9 +118,6 @@ class ArrowLine(QGraphicsPathItem):
 
             intersection = line_shape.intersected(
                 dst_shape).toFillPolygon().boundingRect().center()
-
-        # self.collide = line_shape.intersected(
-        #     dst_shape).toFillPolygon().boundingRect()
 
         s_line = QLineF(p1, (bez_p1 * quarter) + p1)
         angle = math.acos(s_line.dx() / (s_line.length() + 0.00))
@@ -144,14 +173,8 @@ class ArrowLine(QGraphicsPathItem):
         painter.setBrush(QColor(*color))
         painter.drawPolygon(self.arrow_head)
 
-        # painter.setBrush(QColor(0,0,0,200))
-        # painter.drawRect(self.collide)
-        # painter.setBrush(QColor(0,255,0,200))
-        # painter.drawPath(self.dst_shape)
-
     def hoverMoveEvent(self, event):
         self.set_state('hover')
-        self.update()
 
     def hoverLeaveEvent(self, event):
         inherit_selection = self._node_view.inherit_selection
@@ -161,7 +184,6 @@ class ArrowLine(QGraphicsPathItem):
             self.set_state('normal')
         else:
             self.set_state('selected')
-        self.update()
 
     def set_state(self, state, update=True):
         self._state = state
@@ -170,7 +192,6 @@ class ArrowLine(QGraphicsPathItem):
 
     def state(self):
         return self._state
-
 
 
 class Node(QGraphicsPathItem, object):
@@ -317,9 +338,7 @@ class Box(Node):
     def make_shape(self):
         dim = self._dag_node._dim
         dim = [dim[0] * 0.5, dim[1] * 0.5]
-        print 'state==',self.state()
         pen_width = self.style().get_value('line_width', self.state())
-
         box = QRectF(
             dim[0] * -0.5,
             dim[1] * -0.5,
