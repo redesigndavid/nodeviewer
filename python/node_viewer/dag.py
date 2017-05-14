@@ -152,8 +152,8 @@ class Port():
     def calc_pos(self):
         '''calculate port position based on box dimensions'''
         dim = [d * -0.5 for d in self._box._dim]
-        mult = self._box._ports[self._d] - 1
-        idx = self._idx - (mult * 0.5)
+        mult = self._box._ports[self._d]
+        idx = (self._idx - (mult * 0.5)) + 0.5
         offset = {
             'n': [
                 (dim[0] * 0.9 / mult) * idx,
@@ -331,30 +331,36 @@ class Box():
         width = self._dim[0] * 1.4
         height = self._dim[1] * 1.4
         half_height = height / 2.0
-        w_height = height / self._ports['w']
-        e_height = height / self._ports['e']
-        n_width = width / self._ports['n']
-        s_width = width / self._ports['s']
-        w = "".join(
+
+        w = (self._ports['w'] and "".join(
             self._ew_text.format(
-                d='w', height=w_height, idx=i)
+                d='w',
+                height=height / self._ports['w'],
+                idx=i)
             for i in range(self._ports['w']))
-        e = "".join(
+            or "<TD>NULL</TD>")
+        e = (self._ports['e'] and "".join(
             self._ew_text.format(
-                d='e', height=e_height, idx=i)
+                d='e',
+                height=height / self._ports['e'],
+                idx=i)
             for i in range(self._ports['e']))
-        n = "".join([
+            or "<TD>NULL</TD>")
+        n = (self._ports['n'] and "".join([
             self._ns_text.format(
-                width=n_width,
+                width=width / self._ports['n'],
                 height=half_height,
                 idx=i, d='n')
             for i in range(self._ports['n'])])
-        s = "".join([
+            or "<TD>NULL</TD>")
+        s = (self._ports['s'] and " ".join([
             self._ns_text.format(
-                width=s_width,
+                width=width / self._ports['s'],
                 height=half_height,
                 idx=i, d='s')
             for i in range(self._ports['s'])])
+            or "<TD>NULL</TD>")
+
         return self._table_text.format(
             width=width,
             height=height,

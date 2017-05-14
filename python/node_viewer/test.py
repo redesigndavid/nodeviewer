@@ -165,8 +165,8 @@ def test():
             e.style().set_attribute('line_width', 2 + (random.random() * 3), 'normal')
             digraph.add_edge(e)
 
-    b = dag.Box('sample_box', (50, 80),
-                {'n': 2, 's': 2, 'w': 3, 'e': 2},
+    b = dag.Box('sample_box', (500, 800),
+                {'n': 0, 's': 1, 'w': 3, 'e': 2},
                 random.choice(clus),
                 box_data={})
     color = [200, 200, 150, 255]
