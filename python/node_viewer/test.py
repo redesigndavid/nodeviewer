@@ -236,6 +236,7 @@ def test():
         key = None
         while not key or key in taken:
             key = random.choice(_random_titles)
+        taken.append(key)
         return key
 
     for i in range(90):
