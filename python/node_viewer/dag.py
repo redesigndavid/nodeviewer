@@ -44,6 +44,9 @@ class Node(object):
         self._ui = None
         self._style = style.NodeStyle()
 
+    def label(self):
+        return self._label
+
     def style(self):
         return self._style
 

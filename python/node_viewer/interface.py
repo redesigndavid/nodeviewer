@@ -163,7 +163,7 @@ class Node(QGraphicsPathItem, object):
             self.setFlag(QGraphicsItem.ItemIsMovable)
         self.setZValue(self.z_value)
         self.setCacheMode(QGraphicsItem.NoCache)
-        self._circle = None
+
         self.make_shape()
 
     def make_shape(self):
@@ -195,6 +195,10 @@ class Node(QGraphicsPathItem, object):
         stroke_path.addPolygon(self._path.toFillPolygon())
         self.setPath(stroke_path)
 
+        self.node_label = QGraphicsTextItem('')
+        self.node_label.setPlainText(self._dag_node.label())
+        self.node_label.setPos(self.pos())
+
     def style(self):
         return self._dag_node._style
 
@@ -210,6 +214,8 @@ class Node(QGraphicsPathItem, object):
         painter.setBrush(QColor(*fill_color))
 
         painter.drawPath(self._path)
+
+        painter.drawText(self._label)
 
     def setPos(self, x, y):
         super(Node, self).setPos(x, y)
