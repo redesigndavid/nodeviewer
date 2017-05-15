@@ -89,6 +89,16 @@ class NodeStyle(Style):
     _defaults.set_attribute('font_color', (0, 0, 0, 255), _all_states)
 
     _defaults.set_attribute('label_alignment', 'below', _all_states)
+    _defaults.set_attribute('label_fill_color', (25, 125, 0, 255), _all_states)
+    _defaults.set_attribute('label_font_color', (5, 25, 0, 255), _all_states)
+    _defaults.set_attribute('label_pen_color', (25, 0, 0, 255), _all_states)
+    _defaults.set_attribute('label_line_width', 1, _all_states)
+
+    _defaults.set_attribute('label_alignment', 'above', 'selected')
+    _defaults.set_attribute('label_fill_color', (125, 125, 0, 255), 'selected')
+    _defaults.set_attribute('label_font_color', (0, 125, 0, 255), 'selected')
+    _defaults.set_attribute('label_pen_color', (125, 125, 0, 255), 'selected')
+    _defaults.set_attribute('label_line_width', 2, 'selected')
 
     _defaults.set_attribute(
         'fill_color', (255, 205, 205, 255),

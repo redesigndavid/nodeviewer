@@ -247,9 +247,9 @@ def test():
             255]
         k = dag.Node(random_title(), random.choice(clus), node_data={})
         k.style().set_attribute('fill_color', color, 'normal')
-        k.style().set_attribute('pen_color', color, 'normal')
+        k.style().set_attribute('pen_color', [0,color[1]*0.9,0,255], 'normal')
         k.style().set_attribute(
-            'shape', random.choice(['rect', 'round']), '_all_states_')
+            'shape', random.choice(['star', 'rect', 'hexa', 'penta', 'round']), '_all_states_')
         k.style().set_attribute(
             'size',
             [(random.random() * 5) + 15, (random.random() * 5) + 15],

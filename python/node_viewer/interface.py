@@ -26,13 +26,23 @@ class Label(QGraphicsTextItem):
         self.setPos(self._parent.pos())
         self.setZValue(self.z_value)
         self._label_alignment = 'below'
+        self._label_fill_color = 'white'
+        self._label_pen_color = 'white'
+        self._label_line_width = 2
 
     def set_label_alignment(self, alignment):
         self._label_alignment = alignment
         self.update_pos()
 
+    def update_style(self, fill_color, pen_color, font_color, line_width):
+        self._label_fill_color = QColor(*fill_color)
+        self._label_pen_color = QColor(*pen_color)
+        self._label_font_color = QColor(*font_color)
+        self._label_line_width = line_width
+
     def set_text(self, text):
-        text = '<p style="color:white">%s</p>' % text
+        hex_color = str(self._label_font_color.toRgb().name())
+        text = '<p style="color:%s">%s</p>' % (hex_color, text)
         self.setHtml(text)
         self.update_pos()
 
@@ -55,14 +65,12 @@ class Label(QGraphicsTextItem):
         self.setPos(pos)
 
     def paint(self, painter, *args, **kwargs):
-
-        pen = QPen(QColor(255, 0, 0, 255))
-        pen.setWidth(2)
+        pen = QPen(self._label_pen_color)
+        pen.setWidth(self._label_line_width)
         pen.setJoinStyle(Qt.MiterJoin)
         painter.setPen(pen)
-        painter.setBrush(QColor(0, 0, 0, 255))
+        painter.setBrush(self._label_fill_color)
         painter.drawRect(self.boundingRect())
-
         super(Label, self).paint(painter, *args, **kwargs)
 
 
@@ -100,7 +108,8 @@ class ArrowLine(QGraphicsPathItem):
         # calculate
         self.distance = math.hypot(p1.x() - p2.x(), p1.y() - p2.y())
         quarter = (self.distance / -2)
-        arrow_width = self.style().get_value('arrow_width', self._state)
+        pen_width = self.style().get_value('line_width', self._state)
+        arrow_width = pen_width + self.style().get_value('arrow_width', self._state)
 
         if isinstance(self._dag_edge._dst.ui(), Box):
             intersection = QPointF(*self._dag_edge._dst.ui_pos())
@@ -218,44 +227,86 @@ class Node(QGraphicsPathItem, object):
         self.make_label()
 
     def make_label(self):
-        label_alignment = self.style().get_value('label_alignment', self._state)
         self.node_label = Label(self)
+        self.update_label()
+
+    def update_label(self):
+        label_alignment = self.style().get_value('label_alignment', self._state)
+        fill_color = self.style().get_value('label_fill_color', self._state)
+        pen_color = self.style().get_value('label_pen_color', self._state)
+        font_color = self.style().get_value('label_font_color', self._state)
+        line_width = self.style().get_value('label_line_width', self._state)
+
         self.node_label.set_label_alignment(label_alignment)
+        self.node_label.update_style(fill_color, pen_color, font_color, line_width)
         self.node_label.set_text(self._dag_node.label())
 
-    def itemChange(self, change, value):
-        ret = super(Node, self).itemChange(change, value)
-        if change == self.ItemPositionChange:
-            self.node_label.update_pos()
-        return ret
-
     def make_shape(self):
-        size = self.style().get_value('size', self._state)
-        if not isinstance(size, list):
-            size = [size, size]
 
         pen_width = self.style().get_value('line_width', self._state)
         shape = self.style().get_value('shape', self._state)
 
-        box = QRectF(
-            size[0] * -0.5,
-            size[1] * -0.5,
-            size[0],
-            size[1])
+        size = self.style().get_value('size', self._state)
+        if not isinstance(size, list):
+            size = [size, size]
 
         if shape == 'round':
+            box = QRectF(
+                size[0] * -0.5, size[1] * -0.5,
+                size[0], size[1])
+
             self._path = QPainterPath()
             self._path.arcMoveTo(box, 0)
             self._path.arcTo(box, 0, 360)
+
         elif shape == 'rect':
+            box = QRectF(
+                size[0] * -0.5, size[1] * -0.5,
+                size[0], size[1])
+
             self._path = QPainterPath(self.pos())
             self._path.addRect(box)
+
+        elif shape == 'star':
+            size = [size[0] * -1, size[0] * 2.0]
+            self._path = QPainterPath()
+            self._path.moveTo(
+                QPointF((0.5 + 0.5 * math.cos(math.radians(-90)) * size[0]),
+                        (0.5 + 0.5 * math.sin(math.radians(-90)) * size[0])))
+            for i in range(11):
+                y = i % 2
+                self._path.lineTo(
+                    QPointF((0.5 + 0.5 * math.cos(math.radians(-90) + (0.8 * i * math.pi)) * size[y]),
+                            (0.5 + 0.5 * math.sin(math.radians(-90) + (0.8 * i * math.pi)) * size[y])))
+        elif shape == 'hexa':
+            size = [size[0] * 2.0, size[0] * 2.0]
+            self._path = QPainterPath()
+            self._path.moveTo(
+                QPointF((0.5 + 0.5 * math.cos(math.radians(-90)) * size[0]),
+                        (0.5 + 0.5 * math.sin(math.radians(-90)) * size[0])))
+            for i in range(7):
+                y = i % 2
+                self._path.lineTo(
+                    QPointF((0.5 + 0.5 * math.cos(math.radians(-90) + (0.333 * i * math.pi)) * size[y]),
+                            (0.5 + 0.5 * math.sin(math.radians(-90) + (0.333 * i * math.pi)) * size[y])))
+        elif shape == 'penta':
+            size = [size[0] * 2.0, size[0] * 2.0]
+            self._path = QPainterPath()
+            self._path.moveTo(
+                QPointF((0.5 + 0.5 * math.cos(math.radians(-90)) * size[0]),
+                        (0.5 + 0.5 * math.sin(math.radians(-90)) * size[0])))
+            for i in range(6):
+                y = i % 2
+                self._path.lineTo(
+                    QPointF((0.5 + 0.5 * math.cos(math.radians(-90) + (0.4 * i * math.pi)) * size[y]),
+                            (0.5 + 0.5 * math.sin(math.radians(-90) + (0.4 * i * math.pi)) * size[y])))
 
         stroker = QPainterPathStroker()
         stroker.setJoinStyle(Qt.MiterJoin)
         stroker.setWidth(pen_width)  # used as for click detection
         stroke_path = stroker.createStroke(self._path)
         stroke_path.addPolygon(self._path.toFillPolygon())
+
         self.setPath(stroke_path)
 
     def update(self):
@@ -271,6 +322,7 @@ class Node(QGraphicsPathItem, object):
         self._state = state
         if update:
             self.update()
+            self.update_label()
 
     def state(self):
         return self._state
