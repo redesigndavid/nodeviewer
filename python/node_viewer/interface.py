@@ -19,14 +19,13 @@ class Label(QGraphicsTextItem):
     z_value = _layers.get('labels')
 
     def __init__(self, parent):
-        super(QGraphicsTextItem, self).__init__('', parent)
+        super(QGraphicsTextItem, self).__init__('')
+        parent._node_view.scene.addItem(self)
         self._parent = parent
         self.setVisible(False)
         self.setPos(self._parent.pos())
         self.setZValue(self.z_value)
-        import random
-        self._label_alignment = random.choice(
-            ['above', 'below', 'middle', 'left', 'right'])
+        self._label_alignment = 'below'
 
     def set_label_alignment(self, alignment):
         self._label_alignment = alignment
@@ -224,6 +223,12 @@ class Node(QGraphicsPathItem, object):
         self.node_label.set_label_alignment(label_alignment)
         self.node_label.set_text(self._dag_node.label())
 
+    def itemChange(self, change, value):
+        ret = super(Node, self).itemChange(change, value)
+        if change == self.ItemPositionChange:
+            self.node_label.update_pos()
+        return ret
+
     def make_shape(self):
         size = self.style().get_value('size', self._state)
         if not isinstance(size, list):
@@ -289,6 +294,7 @@ class Node(QGraphicsPathItem, object):
     def setPos(self, x, y):
         super(Node, self).setPos(x, y)
         self._dag_node.set_pos([x, y])
+        self.node_label.update_pos()
 
     def hoverMoveEvent(self, event):
         self.set_state('hover')
@@ -314,6 +320,7 @@ class Node(QGraphicsPathItem, object):
             for node in self._node_view.scene.selectedItems()
             if hasattr(node, '_dag_node')]
         self._node_view.update_lines(nodes, fast=True)
+        self.node_label.update_pos()
 
     def mouseReleaseEvent(self, event):
         QGraphicsItem.mouseReleaseEvent(self, event)
@@ -383,6 +390,7 @@ class Box(Node):
             port.ui().update_pos()
         nodes.extend(ports)
         self._node_view.update_lines(nodes, fast=True)
+        self.node_label.update_pos()
 
 
 class NodeViewer(QGraphicsView):
