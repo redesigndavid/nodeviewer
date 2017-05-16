@@ -111,6 +111,42 @@ class Node(object):
     def key(self):
         return self._id
 
+    def seperated_normals(self):
+
+        normals = self.get_edge_normals()
+        repel = self.repeller()
+
+        mult = 0.2 if not repel else 1.2
+
+        for edge, normal in normals.items():
+            other_norms = [
+                other_norm for other_key, other_norm in normals.items()
+                if other_norm != edge]
+            if not other_norms:
+                continue
+            if repel:
+                for i in range(3):
+                    other_norms.append(repel)
+
+            oxs = sum([other_norm[0] for other_norm in other_norms])
+            oys = sum([other_norm[1] for other_norm in other_norms])
+
+            temp_vec = [
+                normals[edge][0] - ((oxs / len(other_norms)) * mult),
+                normals[edge][1] - ((oys / len(other_norms)) * mult)]
+
+            temp_vec_length = math.hypot(temp_vec[0], temp_vec[1])
+
+            if not temp_vec_length:
+                continue
+
+            normals[edge] = [temp_vec[0] / temp_vec_length,
+                             temp_vec[1] / temp_vec_length]
+
+        return normals
+
+
+
 
 class Edge():
     def __init__(self, s, d, w=1, edge_data=None):
@@ -142,7 +178,7 @@ class Edge():
             self._weight))
 
 
-class Port():
+class Port(Node):
 
     def __init__(self, box, d, idx):
         self._box = box

@@ -82,7 +82,7 @@ class ArrowLine(QGraphicsPathItem):
         super(QGraphicsPathItem, self).__init__(*args, **kwargs)
         self.setZValue(self.z_value)
         self.setAcceptsHoverEvents(True)
-        self.setCacheMode(QGraphicsItem.NoCache)
+        #self.setCacheMode(QGraphicsItem.NoCache)
         self.setFlag(QGraphicsItem.ItemIsSelectable)
 
         self._dag_edge = edge
@@ -90,8 +90,9 @@ class ArrowLine(QGraphicsPathItem):
         self._connection_data = edge._edge_data
         self._state = 'normal'
         self._points = {}
-
         self._dag_edge.set_ui(self)
+
+        self._shape_needs_update = True
 
     def style(self):
         return self._dag_edge._style
@@ -160,8 +161,12 @@ class ArrowLine(QGraphicsPathItem):
         curve_stroke.addPolygon(self.arrow_head)
         stroke_path = stroker.createStroke(self.curve_line)
         self.setPath(stroke_path)
+        self._shape_needs_update = False
 
     def paint(self, painter, *args, **kwargs):
+        if not hasattr(self, 'curve_line'):
+            return
+
         pen_width = self.style().get_value('line_width', self._state)
         color = self.style().get_value('pen_color', self._state)
         line_styles = {'solid': Qt.SolidLine,
@@ -221,7 +226,7 @@ class Node(QGraphicsPathItem, object):
         if self.movable:
             self.setFlag(QGraphicsItem.ItemIsMovable)
         self.setZValue(self.z_value)
-        self.setCacheMode(QGraphicsItem.NoCache)
+        #self.setCacheMode(QGraphicsItem.NoCache)
 
         self.make_shape()
         self.make_label()
@@ -464,6 +469,10 @@ class NodeViewer(QGraphicsView):
         self.inherit_selection = []
         self._last_selected = []
 
+        self._looper = QTimer(self)
+        self._looper.timeout.connect(self.new_update_lines)
+        self._looper.start(10)
+
     def _quick_selection_changed(self):
         selected_items = self.scene.selectedItems()
 
@@ -579,7 +588,6 @@ class NodeViewer(QGraphicsView):
             Qt.KeepAspectRatio)
 
     def set_node_data(self, graph):
-        self._graph = graph
 
         self._nodedata = {}
 
@@ -592,13 +600,13 @@ class NodeViewer(QGraphicsView):
         self._outgoing = {}
         self._ingoing = {}
 
-        for nkey, data in self._graph.iter_nodes():
+        for nkey, data in graph.iter_nodes():
             node = Node(self, data)
             node.setPos(*[10 * x for x in data.get_pos()])
             self.scene.addItem(node)
             self._nodes[nkey] = node
 
-        for bkey, data in self._graph.iter_boxes():
+        for bkey, data in graph.iter_boxes():
             box = Box(self, data)
             box.setPos(*[10 * x for x in data.get_pos()])
             self.scene.addItem(box)
@@ -617,18 +625,21 @@ class NodeViewer(QGraphicsView):
                 self._ports[dag_port.key()] = port
                 port.setPos(*dag_port.ui_pos())
 
-        for edge_key, edge in self._graph.iter_edges():
+        for edge_key, edge in graph.iter_edges():
             gline = ArrowLine(self, edge)
             self.scene.addItem(gline)
             self._edges[edge_key] = gline
 
+        self._graph = graph
         self.update_lines()
         self.fit_in_view()
 
     def update_lines(self, affected_items=None, fast=False):
-        if fast:
-            return
         items = affected_items or self.all_node_ports()
+        for node in items:
+            for edge in node.iter_edges():
+                edge.ui()._shape_needs_update = True
+        return
 
         for node in items:
             # gather node's edge's normals
@@ -652,6 +663,38 @@ class NodeViewer(QGraphicsView):
         # update edge shapes
         for edge_key, edge in self._graph.iter_edges():
             line = edge.ui()
+            line.make_shape()
+            line.update()
+
+    def new_update_lines(self):
+        if not self._graph:
+            return
+
+        counter = 0
+        node_normals = {}
+
+        def get_node_normals(node):
+            if node.key() in node_normals:
+                return node_normals[node.key()]
+            node_normals[node.key()] = node.seperated_normals()
+            return node_normals[node.key()]
+
+        for edge_key, edge in self._graph.iter_edges():
+
+            if counter > 10:
+                return
+
+            if not edge.ui()._shape_needs_update:
+                continue
+
+            counter += 1
+            dst_normals = get_node_normals(edge._dst)[edge_key]
+            src_normals = get_node_normals(edge._src)[edge_key]
+            line = edge.ui()
+            line.set_p(0, edge._src.ui_pos())
+            line.set_p(1, src_normals)
+            line.set_p(2, dst_normals)
+            line.set_p(3, edge._dst.ui_pos())
             line.make_shape()
             line.update()
 
