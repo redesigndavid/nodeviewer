@@ -609,11 +609,11 @@ class DiGraph():
         p.stdin.close()
         plain_text = p.stdout.read()
 
-        #p = subprocess.Popen(
-        #    ['dot', '-Tpng', '-o', '/var/tmp/t.png'],
-        #    stdin=subprocess.PIPE)
-        #p.stdin.write(dot_text)
-        #p.stdin.close()
+        p = subprocess.Popen(
+            ['dot', '-Tdot', '-o', '/var/tmp/t.png.dot'],
+            stdin=subprocess.PIPE)
+        p.stdin.write(dot_text)
+        p.stdin.close()
 
         for line in dot_text.splitlines():
             if line.count('cluster'):

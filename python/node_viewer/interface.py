@@ -626,6 +626,8 @@ class NodeViewer(QGraphicsView):
         self.fit_in_view()
 
     def update_lines(self, affected_items=None, fast=False):
+        if fast:
+            return
         items = affected_items or self.all_node_ports()
 
         for node in items:
