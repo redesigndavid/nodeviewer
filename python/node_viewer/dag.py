@@ -475,6 +475,11 @@ class DiGraph():
             node_key = 'node_%s' % node_key
         return self._nodes[node_key]
 
+    def get_box(self, node_key):
+        if not node_key.startswith('box_'):
+            node_key = 'box_%s' % node_key
+        return self._boxes[node_key]
+
     def iter_nodes(self):
         return [(k[len('node_'):], v)
                 for k, v in self._nodes.items()]
@@ -594,13 +599,16 @@ class DiGraph():
                 for node in node_group:
                     node_groups[node] = idx
             for node in self._nodes.values():
-                idx = node_groups.get(node, 'main')
+                groupname = node._rank_family or node_groups.get(node, 'main')
+                print node._rank_family
                 rank_family.setdefault(
-                    'group%s' % idx, []).append(node)
+                    'group%s' % groupname, []).append(node)
             for box in self._boxes.values():
-                idx = node_groups.get(box, 'main')
+                groupname = node_groups.get(node, 'main')
+                if not groupname and box._rank_family:
+                    groupname = box._rank_family
                 rank_family.setdefault(
-                    'group%s' % idx, []).append(box)
+                    'group%s' % groupname, []).append(box)
 
         else:
             for node in self._nodes.values():
@@ -620,9 +628,9 @@ class DiGraph():
                 dot_text += "}\n"
 
         dot_text += "}\n"
-
+        command = 'dot'
         p = subprocess.Popen(
-            ['dot'],
+            [command],
             stdout=subprocess.PIPE,
             stdin=subprocess.PIPE)
         p.stdin.write(dot_text)
@@ -638,7 +646,7 @@ class DiGraph():
         dot_text = p.stdout.read()
 
         p = subprocess.Popen(
-            ['dot', '-Tplain-ext'],
+            [command, '-Tplain-ext'],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE)
         p.stdin.write(dot_text)
@@ -646,7 +654,7 @@ class DiGraph():
         plain_text = p.stdout.read()
 
         p = subprocess.Popen(
-            ['dot', '-Tdot', '-o', '/var/tmp/t.png.dot'],
+            [command, '-Tdot', '-o', '/var/tmp/t.png.dot'],
             stdin=subprocess.PIPE)
         p.stdin.write(dot_text)
         p.stdin.close()
@@ -661,9 +669,9 @@ class DiGraph():
             _, item_key, x, y = line.split()[:4]
             item_key = item_key.strip('"')
             if item_key in self._nodes:
-                self._nodes[item_key].set_pos((float(x) * 3, float(y) * -3))
+                self._nodes[item_key].set_pos((float(x) * 3, float(y) * 3))
             else:
-                self._boxes[item_key].set_pos((float(x) * 3, float(y) * -3))
+                self._boxes[item_key].set_pos((float(x) * 3, float(y) * 3))
 
 
 def test():

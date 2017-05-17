@@ -92,8 +92,6 @@ class ArrowLine(QGraphicsPathItem):
         self._points = {}
         self._dag_edge.set_ui(self)
 
-        self._shape_needs_update = True
-
     def style(self):
         return self._dag_edge._style
 
@@ -114,19 +112,20 @@ class ArrowLine(QGraphicsPathItem):
 
         if isinstance(self._dag_edge._dst.ui(), Box):
             intersection = QPointF(*self._dag_edge._dst.ui_pos())
+            self._rerect = QPainterPath() 
         else:
             stroker = QPainterPathStroker()
             stroker.setWidth(1)
-            dst_shape = QPainterPath(self._dag_edge._dst.ui()._path)
-            dst_shape.translate(QPointF(p1))
-            dst_shape = stroker.createStroke(dst_shape)
+            src_shape = QPainterPath(self._dag_edge._src.ui()._path)
+            src_shape.translate(QPointF(p1))
+            src_shape = stroker.createStroke(src_shape)
 
             line_shape = QPainterPath(p1)
             line_shape.lineTo((bez_p1 * quarter) + p1)
             line_shape = stroker.createStroke(line_shape)
 
             intersection = line_shape.intersected(
-                dst_shape).toFillPolygon().boundingRect().center()
+                src_shape).toFillPolygon().boundingRect().center()
 
         s_line = QLineF(p1, (bez_p1 * quarter) + p1)
         angle = math.acos(s_line.dx() / (s_line.length() + 0.00))
@@ -161,7 +160,6 @@ class ArrowLine(QGraphicsPathItem):
         curve_stroke.addPolygon(self.arrow_head)
         stroke_path = stroker.createStroke(self.curve_line)
         self.setPath(stroke_path)
-        self._shape_needs_update = False
 
     def paint(self, painter, *args, **kwargs):
         if not hasattr(self, 'curve_line'):
@@ -199,6 +197,8 @@ class ArrowLine(QGraphicsPathItem):
             self.set_state('selected')
 
     def set_state(self, state, update=True):
+        if self._state == state:
+            return
         self._state = state
         if update:
             self.update()
@@ -326,8 +326,9 @@ class Node(QGraphicsPathItem, object):
     def set_state(self, state, update=True):
         self._state = state
         if update:
-            self.update()
-            self.update_label()
+            # self.update()
+            # self.update_label()
+            self._node_view._dirty_nodes.add(self._dag_node.key())
 
     def state(self):
         return self._state
@@ -376,7 +377,7 @@ class Node(QGraphicsPathItem, object):
             node._dag_node
             for node in self._node_view.scene.selectedItems()
             if hasattr(node, '_dag_node')]
-        self._node_view.update_lines(nodes, fast=True)
+        self._node_view.mark_edges_dirty(nodes, fast=True)
         self.node_label.update_pos()
 
     def mouseReleaseEvent(self, event):
@@ -385,7 +386,7 @@ class Node(QGraphicsPathItem, object):
         pos = [self.pos().x(), self.pos().y()]
         self._dag_node.set_pos(pos)
         nodes = self._dag_node.iter_edge_connections()
-        self._node_view.update_lines(nodes, fast=False)
+        self._node_view.mark_edges_dirty(nodes, fast=False)
 
 
 class Port(Node):
@@ -446,7 +447,7 @@ class Box(Node):
         for port in ports:
             port.ui().update_pos()
         nodes.extend(ports)
-        self._node_view.update_lines(nodes, fast=True)
+        self._node_view.mark_edges_dirty(nodes, fast=True)
         self.node_label.update_pos()
 
 
@@ -468,6 +469,10 @@ class NodeViewer(QGraphicsView):
         self.scene.addLine(0, 0, 10, 0)
         self.inherit_selection = []
         self._last_selected = []
+
+        self._dirty_edges = set([])
+        self._dirty_nodes = set([])
+        self._dirty_boxes = set([])
 
         self._looper = QTimer(self)
         self._looper.timeout.connect(self.new_update_lines)
@@ -499,8 +504,8 @@ class NodeViewer(QGraphicsView):
 
     def _selection_changed(self):
         selected_items = self.scene.selectedItems()
+        all_items = selected_items[:] + self._last_selected[:]
         modifiers = QApplication.keyboardModifiers()
-
         if modifiers == Qt.ShiftModifier:
             selected_items.extend(self._last_selected)
 
@@ -519,9 +524,6 @@ class NodeViewer(QGraphicsView):
         for item in selected_items:
             item.setSelected(True)
 
-        all_items = (self._nodes.values()
-                     + self._edges.values()
-                     + self._boxes.values())
         for item in all_items:
             if item in iter_items:
                 item.set_state('selected')
@@ -531,8 +533,6 @@ class NodeViewer(QGraphicsView):
                 item.set_state('normal')
 
         self._last_selected = self.scene.selectedItems()
-
-        self.update_lines()
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MiddleButton:
@@ -629,48 +629,23 @@ class NodeViewer(QGraphicsView):
             gline = ArrowLine(self, edge)
             self.scene.addItem(gline)
             self._edges[edge_key] = gline
+            self._dirty_edges.add(edge_key)
 
         self._graph = graph
-        self.update_lines()
         self.fit_in_view()
 
-    def update_lines(self, affected_items=None, fast=False):
+    def mark_edges_dirty(self, affected_items=None, fast=False):
+        if not fast or not affected_items:
+            return
         items = affected_items or self.all_node_ports()
         for node in items:
             for edge in node.iter_edges():
-                edge.ui()._shape_needs_update = True
-        return
-
-        for node in items:
-            # gather node's edge's normals
-            normals = node.get_edge_normals()
-
-            # seperate the normals from each other
-            if not fast:
-                normals = seperate_normals(normals, repel=node.repeller())
-
-            # assign the bezier points based on the seperated normals
-            for edge_key, normal in normals.items():
-                edge = self._graph.get_edge(edge_key)
-                line = edge.ui()
-                if edge._dst.key() == node.key():
-                    line.set_p(0, node.ui_pos())
-                    line.set_p(1, normal)
-                else:
-                    line.set_p(3, node.ui_pos())
-                    line.set_p(2, normal)
-
-        # update edge shapes
-        for edge_key, edge in self._graph.iter_edges():
-            line = edge.ui()
-            line.make_shape()
-            line.update()
+                self._dirty_edges.add(edge.key())
 
     def new_update_lines(self):
         if not self._graph:
             return
 
-        counter = 0
         node_normals = {}
 
         def get_node_normals(node):
@@ -679,15 +654,9 @@ class NodeViewer(QGraphicsView):
             node_normals[node.key()] = node.seperated_normals()
             return node_normals[node.key()]
 
-        for edge_key, edge in self._graph.iter_edges():
+        for edge_key in list(self._dirty_edges)[:100]:
+            edge = self._graph.get_edge(edge_key)
 
-            if counter > 10:
-                return
-
-            if not edge.ui()._shape_needs_update:
-                continue
-
-            counter += 1
             dst_normals = get_node_normals(edge._dst)[edge_key]
             src_normals = get_node_normals(edge._src)[edge_key]
             line = edge.ui()
@@ -696,7 +665,19 @@ class NodeViewer(QGraphicsView):
             line.set_p(2, dst_normals)
             line.set_p(3, edge._dst.ui_pos())
             line.make_shape()
+            self._dirty_edges.remove(edge_key)
             line.update()
+
+        for node_key in list(set(self._dirty_nodes))[:100]:
+            if not node_key.startswith(('node_', 'box_')):
+                continue
+            try:
+                obj = self._graph.get_node(node_key)
+            except KeyError:
+                obj = self._graph.get_box(node_key)
+            obj.ui().update()
+            obj.ui().update_label()
+            self._dirty_nodes.remove(node_key)
 
     def all_node_ports(self):
         items = []
