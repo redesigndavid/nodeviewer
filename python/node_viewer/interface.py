@@ -422,6 +422,13 @@ class Box(Node):
         stroke_path.addPolygon(self._path.toFillPolygon())
         self.setPath(stroke_path)
 
+        ports = self._dag_node.get_ports()
+
+        for port in ports:
+            if not port.ui():
+                continue
+            port.ui().update_label()
+
     def paint(self, painter, *args, **kwargs):
         fill_color = self.style().get_value('fill_color', self.state())
         pen_color = self.style().get_value('pen_color', self.state())
@@ -459,11 +466,11 @@ class NodeViewer(QGraphicsView):
         self.scene.setBackgroundBrush(QColor(100, 80, 80, 255))
         self.scene.selectionChanged.connect(self._quick_selection_changed)
         self.setScene(self.scene)
+
         self.setRenderHints(QPainter.Antialiasing)
-        self.setViewportUpdateMode(QGraphicsView.BoundingRectViewportUpdate)
-        self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
         self.setResizeAnchor(QGraphicsView.AnchorViewCenter)
         self.setDragMode(QGraphicsView.RubberBandDrag)
+        self.setViewportUpdateMode(QGraphicsView.BoundingRectViewportUpdate)
 
         self.scene.addLine(0, 0, 0, 10)
         self.scene.addLine(0, 0, 10, 0)
@@ -476,7 +483,7 @@ class NodeViewer(QGraphicsView):
 
         self._looper = QTimer(self)
         self._looper.timeout.connect(self.new_update_lines)
-        self._looper.start(10)
+        self._looper.start(1)
 
     def _quick_selection_changed(self):
         selected_items = self.scene.selectedItems()
@@ -549,7 +556,6 @@ class NodeViewer(QGraphicsView):
             self.setDragMode(QGraphicsView.RubberBandDrag)
 
     def mouseReleaseEvent(self, event):
-        self.setDragMode(QGraphicsView.RubberBandDrag)
         if event.button() == Qt.MiddleButton:
             fake = QMouseEvent(
                 event.type(),
@@ -560,6 +566,8 @@ class NodeViewer(QGraphicsView):
             QGraphicsView.mouseReleaseEvent(self, fake)
         else:
             QGraphicsView.mouseReleaseEvent(self, event)
+        self.setDragMode(QGraphicsView.RubberBandDrag)
+        self.setResizeAnchor(QGraphicsView.AnchorViewCenter)
         self._selection_changed()
 
     def wheelEvent(self, event):
@@ -599,7 +607,7 @@ class NodeViewer(QGraphicsView):
         self._node_edges = {}
         self._outgoing = {}
         self._ingoing = {}
-
+        
         for nkey, data in graph.iter_nodes():
             node = Node(self, data)
             node.setPos(*[10 * x for x in data.get_pos()])
@@ -668,8 +676,11 @@ class NodeViewer(QGraphicsView):
             self._dirty_edges.remove(edge_key)
             line.update()
 
-        for node_key in list(set(self._dirty_nodes))[:100]:
+        for node_key in list(self._dirty_nodes)[:100]:
             if not node_key.startswith(('node_', 'box_')):
+                if node_key.count(':'):
+                    # clean up ports
+                    self._dirty_nodes.remove(node_key)
                 continue
             try:
                 obj = self._graph.get_node(node_key)
