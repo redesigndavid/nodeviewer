@@ -1,4 +1,5 @@
 import math
+from . import dag
 
 from PyQt4.QtGui import *
 from PyQt4.QtCore import *
@@ -7,7 +8,7 @@ from PyQt4.QtCore import *
 if not hasattr(Qt, 'MiddleButton'):
     Qt.MiddleButton = Qt.MidButton
 
-_layers = {'labels': 100,
+_layers = {'labels': -100,
            'edges': 2,
            'ports': 4,
            'boxes': 1,
@@ -33,6 +34,12 @@ class Label(QGraphicsTextItem):
     def set_label_alignment(self, alignment):
         self._label_alignment = alignment
         self.update_pos()
+        b = super(Label, self).boundingRect()
+        b.setX(b.x() + 1)
+        b.setY(b.y() + 1)
+        b.setHeight(b.height() - 2)
+        b.setWidth(b.width() - 2)
+        self._rect = b
 
     def update_style(self, fill_color, pen_color, font_color, line_width):
         self._label_fill_color = QColor(*fill_color)
@@ -70,7 +77,7 @@ class Label(QGraphicsTextItem):
         pen.setJoinStyle(Qt.MiterJoin)
         painter.setPen(pen)
         painter.setBrush(self._label_fill_color)
-        painter.drawRect(self.boundingRect())
+        painter.drawRect(self._rect)
         super(Label, self).paint(painter, *args, **kwargs)
 
 
@@ -112,7 +119,7 @@ class ArrowLine(QGraphicsPathItem):
 
         if isinstance(self._dag_edge._dst.ui(), Box):
             intersection = QPointF(*self._dag_edge._dst.ui_pos())
-            self._rerect = QPainterPath() 
+            self._rerect = QPainterPath()
         else:
             stroker = QPainterPathStroker()
             stroker.setWidth(1)
@@ -128,7 +135,7 @@ class ArrowLine(QGraphicsPathItem):
                 src_shape).toFillPolygon().boundingRect().center()
 
         s_line = QLineF(p1, (bez_p1 * quarter) + p1)
-        angle = math.acos(s_line.dx() / (s_line.length() + 0.00))
+        angle = math.acos(s_line.dx() / (s_line.length() + 0.001))
         if s_line.dy() >= 0:
             angle = (math.pi * 2.0) - angle
 
@@ -184,6 +191,15 @@ class ArrowLine(QGraphicsPathItem):
         painter.setBrush(QColor(*color))
         painter.drawPolygon(self.arrow_head)
 
+    def guess_state(self):
+        if 'selected' in (self._dag_edge._src.ui().state(), self._dag_edge._dst.ui().state()):
+            self.set_state('inherit_selected')
+        elif self in self._node_view.selected_items:
+            self.set_state('selected')
+        elif self in self._node_view.inherit_selection:
+            self._node_view.inherit_selection.remove(self)
+            self.set_state('normal')
+
     def hoverMoveEvent(self, event):
         self.set_state('hover')
 
@@ -212,7 +228,7 @@ class Node(QGraphicsPathItem, object):
     movable = True
     z_value = _layers.get('nodes')
 
-    def __init__(self, node_view, node, node_style=None, *args, **kwargs):
+    def __init__(self, node_view, node, *args, **kwargs):
         super(Node, self).__init__(*args, **kwargs)
         self._node_view = node_view
         self._dag_node = node
@@ -226,7 +242,6 @@ class Node(QGraphicsPathItem, object):
         if self.movable:
             self.setFlag(QGraphicsItem.ItemIsMovable)
         self.setZValue(self.z_value)
-        #self.setCacheMode(QGraphicsItem.NoCache)
 
         self.make_shape()
         self.make_label()
@@ -250,61 +265,67 @@ class Node(QGraphicsPathItem, object):
 
         pen_width = self.style().get_value('line_width', self._state)
         shape = self.style().get_value('shape', self._state)
+        peripheries = (
+            (2 * self.style().get_value('peripheries', self._state, 0)) + 1)
 
         size = self.style().get_value('size', self._state)
         if not isinstance(size, list):
             size = [size, size]
 
+        self._path = QPainterPath(self.pos())
         if shape == 'round':
-            box = QRectF(
-                size[0] * -0.5, size[1] * -0.5,
-                size[0], size[1])
-
-            self._path = QPainterPath()
-            self._path.arcMoveTo(box, 0)
-            self._path.arcTo(box, 0, 360)
+            for i in range(peripheries):
+                ssize = [si + (pen_width * i * 5) for si in size]
+                box = QRectF(
+                    ssize[0] * -0.5, ssize[1] * -0.5,
+                    ssize[0], ssize[1])
+                self._path.arcMoveTo(box, 0)
+                self._path.arcTo(box, 0, 360)
 
         elif shape == 'rect':
-            box = QRectF(
-                size[0] * -0.5, size[1] * -0.5,
-                size[0], size[1])
-
-            self._path = QPainterPath(self.pos())
-            self._path.addRect(box)
+            for i in range(peripheries):
+                size = [si + (pen_width * i * 2) for si in size]
+                box = QRectF(
+                    size[0] * -0.5, size[1] * -0.5,
+                    size[0], size[1])
+                self._path.addRect(box)
 
         elif shape == 'star':
-            size = [size[0] * -1, size[0] * 2.0]
-            self._path = QPainterPath()
-            self._path.moveTo(
-                QPointF((0.5 + 0.5 * math.cos(math.radians(-90)) * size[0]),
-                        (0.5 + 0.5 * math.sin(math.radians(-90)) * size[0])))
-            for i in range(11):
-                y = i % 2
-                self._path.lineTo(
-                    QPointF((0.5 + 0.5 * math.cos(math.radians(-90) + (0.8 * i * math.pi)) * size[y]),
-                            (0.5 + 0.5 * math.sin(math.radians(-90) + (0.8 * i * math.pi)) * size[y])))
+            for i in range(peripheries):
+                ssize = [si + (pen_width * i * 5) for si in size]
+                ssize = [ssize[0] * -1, ssize[0] * 2.0]
+                self._path.moveTo(
+                    QPointF((0.5 + 0.5 * math.cos(math.radians(-90)) * ssize[0]),
+                            (0.5 + 0.5 * math.sin(math.radians(-90)) * ssize[0])))
+                for i in range(11):
+                    y = i % 2
+                    self._path.lineTo(
+                        QPointF((0.5 + 0.5 * math.cos(math.radians(-90) + (0.8 * i * math.pi)) * ssize[y]),
+                                (0.5 + 0.5 * math.sin(math.radians(-90) + (0.8 * i * math.pi)) * ssize[y])))
         elif shape == 'hexa':
-            size = [size[0] * 2.0, size[0] * 2.0]
-            self._path = QPainterPath()
-            self._path.moveTo(
-                QPointF((0.5 + 0.5 * math.cos(math.radians(-90)) * size[0]),
-                        (0.5 + 0.5 * math.sin(math.radians(-90)) * size[0])))
-            for i in range(7):
-                y = i % 2
-                self._path.lineTo(
-                    QPointF((0.5 + 0.5 * math.cos(math.radians(-90) + (0.333 * i * math.pi)) * size[y]),
-                            (0.5 + 0.5 * math.sin(math.radians(-90) + (0.333 * i * math.pi)) * size[y])))
+            for i in range(peripheries):
+                ssize = [si + (pen_width * i * 2) for si in size]
+                ssize = [ssize[0] * 2.0, ssize[0] * 2.0]
+                self._path.moveTo(
+                    QPointF((0.5 + 0.5 * math.cos(math.radians(-90)) * ssize[0]),
+                            (0.5 + 0.5 * math.sin(math.radians(-90)) * ssize[0])))
+                for i in range(7):
+                    y = i % 2
+                    self._path.lineTo(
+                        QPointF((0.5 + 0.5 * math.cos(math.radians(-90) + (0.333 * i * math.pi)) * ssize[y]),
+                                (0.5 + 0.5 * math.sin(math.radians(-90) + (0.333 * i * math.pi)) * ssize[y])))
         elif shape == 'penta':
-            size = [size[0] * 2.0, size[0] * 2.0]
-            self._path = QPainterPath()
-            self._path.moveTo(
-                QPointF((0.5 + 0.5 * math.cos(math.radians(-90)) * size[0]),
-                        (0.5 + 0.5 * math.sin(math.radians(-90)) * size[0])))
-            for i in range(6):
-                y = i % 2
-                self._path.lineTo(
-                    QPointF((0.5 + 0.5 * math.cos(math.radians(-90) + (0.4 * i * math.pi)) * size[y]),
-                            (0.5 + 0.5 * math.sin(math.radians(-90) + (0.4 * i * math.pi)) * size[y])))
+            for i in range(peripheries):
+                ssize = [si + (pen_width * i * 2) for si in size]
+                ssize = [ssize[0] * 2.0, ssize[0] * 2.0]
+                self._path.moveTo(
+                    QPointF((0.5 + 0.5 * math.cos(math.radians(-90)) * ssize[0]),
+                            (0.5 + 0.5 * math.sin(math.radians(-90)) * ssize[0])))
+                for i in range(6):
+                    y = i % 2
+                    self._path.lineTo(
+                        QPointF((0.5 + 0.5 * math.cos(math.radians(-90) + (0.4 * i * math.pi)) * ssize[y]),
+                                (0.5 + 0.5 * math.sin(math.radians(-90) + (0.4 * i * math.pi)) * ssize[y])))
 
         stroker = QPainterPathStroker()
         stroker.setJoinStyle(Qt.MiterJoin)
@@ -326,9 +347,14 @@ class Node(QGraphicsPathItem, object):
     def set_state(self, state, update=True):
         self._state = state
         if update:
-            # self.update()
-            # self.update_label()
             self._node_view._dirty_nodes.add(self._dag_node.key())
+            for edge in self._dag_node.iter_edges():
+                if state == 'selected':
+                    edge.ui().set_state('inherit_selected')
+                elif state == 'normal':
+                    edge.ui().guess_state()
+            self._node_view._dirty_edges.union(
+                set(self._dag_node.iter_edges()))
 
     def state(self):
         return self._state
@@ -340,7 +366,6 @@ class Node(QGraphicsPathItem, object):
         fill_color = self.style().get_value('fill_color', self.state())
         pen_color = self.style().get_value('pen_color', self.state())
         pen_width = self.style().get_value('line_width', self.state())
-
         pen = QPen(QColor(*pen_color))
         pen.setWidth(pen_width)
         pen.setJoinStyle(Qt.MiterJoin)
@@ -387,6 +412,10 @@ class Node(QGraphicsPathItem, object):
         self._dag_node.set_pos(pos)
         nodes = self._dag_node.iter_edge_connections()
         self._node_view.mark_edges_dirty(nodes, fast=False)
+
+
+class Group(Node):
+    pass
 
 
 class Port(Node):
@@ -476,6 +505,7 @@ class NodeViewer(QGraphicsView):
         self.scene.addLine(0, 0, 10, 0)
         self.inherit_selection = []
         self._last_selected = []
+        self.selected_items = []
 
         self._dirty_edges = set([])
         self._dirty_nodes = set([])
@@ -486,9 +516,9 @@ class NodeViewer(QGraphicsView):
         self._looper.start(1)
 
     def _quick_selection_changed(self):
-        selected_items = self.scene.selectedItems()
+        self.selected_items = self.scene.selectedItems()
 
-        for item in selected_items:
+        for item in self.selected_items:
             item.set_state('consider_selection')
 
     def _get_selected_boxnodes(self):
@@ -510,36 +540,106 @@ class NodeViewer(QGraphicsView):
         return selected_edges
 
     def _selection_changed(self):
-        selected_items = self.scene.selectedItems()
-        all_items = selected_items[:] + self._last_selected[:]
+        all_items = self.selected_items[:] + self._last_selected[:]
         modifiers = QApplication.keyboardModifiers()
         if modifiers == Qt.ShiftModifier:
-            selected_items.extend(self._last_selected)
+            self.selected_items.extend(self._last_selected)
+            for item in self._last_selected:
+                item.setSelected(True)
 
-        selected_nodes = self._get_selected_boxnodes()
-        selected_edges = self._get_selected_edges()
-
-        iter_items = selected_nodes or selected_edges
+        types = set([type(item) for item in all_items])
+        unselect_edges = (ArrowLine in types) and (len(types) > 1)
 
         self.inherit_selection = []
-        for item in iter_items:
+        for item in all_items:
             if isinstance(item, ArrowLine):
+                if unselect_edges:
+                    item.setSelected(False)
                 continue
             for edge in item._dag_node.iter_edges():
                 self.inherit_selection.append(edge.ui())
 
-        for item in selected_items:
-            item.setSelected(True)
-
         for item in all_items:
-            if item in iter_items:
+            if item in self.selected_items:
                 item.set_state('selected')
             elif item in self.inherit_selection:
                 item.set_state('inherit_selected')
             else:
                 item.set_state('normal')
 
-        self._last_selected = self.scene.selectedItems()
+        self._last_selected = self.selected_items[:]
+
+    def key_action_focus(self):
+        nodes = [
+            node for node in self._last_selected
+            if isinstance(node, (Node, Box, Group))]
+        if not nodes:
+            self.fit_in_view((self._nodes.values() + self._boxes.values()), 1.8)
+        else:
+            self.fit_in_view(nodes)
+
+    def key_action_group(self):
+        nodes = [
+            node for node in self._last_selected
+            if node._dag_node.key().startswith('node')]
+
+        def add_group(nodes):
+            posx = sum([node.pos().x() for node in nodes]) / len(nodes)
+            posy = sum([node.pos().y() for node in nodes]) / len(nodes)
+            pos = QPointF(posx, posy)
+            dag_group = dag.DagGroup('group', [n._dag_node for n in nodes])
+            self._graph.add_group(dag_group)
+            group = Group(self, dag_group)
+            group.setPos(posx, posy)
+            self.scene.addItem(group)
+
+            for node in nodes:
+                node._dag_node._hidden = True
+                node._dag_node._group = group
+                node._dag_node._old_ui = node
+                node._dag_node.set_ui(group)
+                node.hide()
+                node.node_label.hide()
+                for edge in node._dag_node.iter_edges():
+                    self._dirty_edges.add(edge.key())
+
+        add_group(nodes)
+
+    def key_action_ungroup(self):
+        groups = [
+            node for node in self._last_selected
+            if isinstance(node, Group)]
+        def ungroup(group):
+            for node in group._dag_node._nodes:
+                node._hidden = False
+                node._group = None
+                node.set_ui(node._old_ui)
+                node.ui().show()
+
+                for edge in node.iter_edges():
+                    self._dirty_edges.add(edge.key())
+
+            group.node_label.hide()
+            group.hide()
+            self.scene.removeItem(group)
+
+        for grp in groups:
+            ungroup(grp)
+
+    def key_action_quit(self):
+        QApplication.quit()
+
+    def keyPressEvent(self, event):
+        key = event.key()
+
+        if key == Qt.Key_F:
+            self.key_action_focus()
+        elif key == Qt.Key_U:
+            self.key_action_ungroup()
+        elif key == Qt.Key_G:
+            self.key_action_group()
+        elif key == Qt.Key_Q:
+            self.key_action_quit()
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MiddleButton:
@@ -577,23 +677,37 @@ class NodeViewer(QGraphicsView):
     def scaleView(self, scale_factor):
         factor = self.matrix().scale(
             scale_factor, scale_factor).mapRect(
-                QRectF(0, 0, 1, 1)).width()
+                QRectF(-1, -1, 2, 2)).width()
 
         if factor < 0.07 or factor > 100:
             return
 
         self.scale(scale_factor, scale_factor)
 
-    def fit_in_view(self):
-        xs = [nod.pos().x() for nod in self._nodes.values()]
-        ys = [nod.pos().y() for nod in self._nodes.values()]
+    def fit_in_view(self, nodes, scale=0.4):
+
+        xs = [nod.pos().x() for nod in nodes]
+        ys = [nod.pos().y() for nod in nodes]
+
         minx = min(xs)
         miny = min(ys)
         maxx = max(xs)
         maxy = max(ys)
+        self.scene.setSceneRect(
+            -200 + minx,
+            -200 + miny,
+            400 + maxx - minx,
+            400 + maxy - miny)
         self.fitInView(
-            minx, miny, maxx - minx, maxy - miny,
+            minx, miny, maxx - minx + 1, maxy - miny + 1,
             Qt.KeepAspectRatio)
+        if len(nodes) == 1:
+            self.scale(0.008, 0.008)
+        elif len(nodes) > 100:
+            self.scale(1.8, 1.8)
+        else:
+            self.scale(scale, scale)
+
 
     def set_node_data(self, graph):
 
@@ -607,7 +721,7 @@ class NodeViewer(QGraphicsView):
         self._node_edges = {}
         self._outgoing = {}
         self._ingoing = {}
-        
+
         for nkey, data in graph.iter_nodes():
             node = Node(self, data)
             node.setPos(*[10 * x for x in data.get_pos()])
@@ -640,7 +754,7 @@ class NodeViewer(QGraphicsView):
             self._dirty_edges.add(edge_key)
 
         self._graph = graph
-        self.fit_in_view()
+        self.fit_in_view(self._nodes.values())
 
     def mark_edges_dirty(self, affected_items=None, fast=False):
         if not fast or not affected_items:
@@ -664,7 +778,13 @@ class NodeViewer(QGraphicsView):
 
         for edge_key in list(self._dirty_edges)[:100]:
             edge = self._graph.get_edge(edge_key)
-
+            src = edge._src
+            dst = edge._dst
+            if src._hidden and dst._hidden and src._group._dag_node.key() == dst._group._dag_node.key():
+                edge.ui().hide()
+                self._dirty_edges.remove(edge_key)
+                continue
+            edge.ui().show()
             dst_normals = get_node_normals(edge._dst)[edge_key]
             src_normals = get_node_normals(edge._src)[edge_key]
             line = edge.ui()
@@ -677,15 +797,15 @@ class NodeViewer(QGraphicsView):
             line.update()
 
         for node_key in list(self._dirty_nodes)[:100]:
-            if not node_key.startswith(('node_', 'box_')):
+            if not node_key.startswith(('node_', 'box_', 'group_')):
                 if node_key.count(':'):
                     # clean up ports
                     self._dirty_nodes.remove(node_key)
                 continue
-            try:
-                obj = self._graph.get_node(node_key)
-            except KeyError:
-                obj = self._graph.get_box(node_key)
+            obj = self._graph.get_object(node_key)
+            if not obj:
+                continue
+
             obj.ui().update()
             obj.ui().update_label()
             self._dirty_nodes.remove(node_key)

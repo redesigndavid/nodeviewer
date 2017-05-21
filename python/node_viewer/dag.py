@@ -33,16 +33,23 @@ def unique_key():
     return key
 
 
-class Node(object):
+class DagNode(object):
+
+    _class = 'node'
+    _style_generator = style.NodeStyle
+
     def __init__(self, node_label, rank_family=None, node_data=None, uid=None):
         self._label = node_label
-        self._id = 'node_%s' % (uid or unique_key())
+        self._id = '%s_%s' % (self._class, uid or unique_key())
         self._rank_family = rank_family
         self._pos = [0, 0]
         self._node_data = node_data or {}
         self._graph = None
         self._ui = None
-        self._style = style.NodeStyle()
+        self._style = self._style_generator()
+        self._hidden = False
+        self._group = None
+        self._old_ui = None
 
     def label(self):
         return self._label
@@ -89,7 +96,7 @@ class Node(object):
             if not is_forwards:
                 offset = [dim * -1 for dim in offset]
             offset_length = math.hypot(offset[0], offset[1])
-            normal = [dim / offset_length for dim in offset]
+            normal = [dim / (offset_length + 0.00001) for dim in offset]
             normals[edge.key()] = normal
         return normals
 
@@ -146,9 +153,23 @@ class Node(object):
         return normals
 
 
+class DagGroup(DagNode):
+
+    _class = 'group'
+    _style_generator = style.GroupStyle
+
+    def __init__(self, node_label, nodes, rank_family=None, node_data=None, uid=None):
+        DagNode.__init__(self, node_label, rank_family, node_data, uid)
+        self._nodes = nodes
+
+    def iter_edges(self):
+        edges = []
+        for node in self._nodes:
+            edges.extend(node.iter_edges())
+        return edges
 
 
-class Edge():
+class DagEdge():
     def __init__(self, s, d, w=1, edge_data=None):
         self._src = s
         self._dst = d
@@ -166,6 +187,12 @@ class Edge():
     def ui(self):
         return self._ui
 
+    def set_src(self, src):
+        self._src = src
+
+    def set_dst(self, dst):
+        self._dst = dst
+
     @memoize
     def key(self):
         return "%s->%s" % (self._src.key(), self._dst.key())
@@ -178,7 +205,7 @@ class Edge():
             self._weight))
 
 
-class Port(Node):
+class DagPort(DagNode):
 
     def __init__(self, box, d, idx):
         self._box = box
@@ -193,6 +220,8 @@ class Port(Node):
             'e': [1, 0],
             'w': [-1, 0]}[self._d]
         self._label = 'port'
+        self._hidden = False
+        self._old_ui = None
 
     def label(self):
         return self._label
@@ -256,23 +285,8 @@ class Port(Node):
                 self._box.graph()._node_edges.get(
                     self.key(), [])]
 
-    def get_edge_normals(self):
-        # gather node's edge's normals
-        normals = {}
-        for edge in self.iter_edges():
-            is_forwards = (edge._src.key() == self.key())
-            offset = [
-                edge._src.ui_pos()[0] - edge._dst.ui_pos()[0],
-                edge._src.ui_pos()[1] - edge._dst.ui_pos()[1]]
-            if not is_forwards:
-                offset = [dim * -1 for dim in offset]
-            offset_length = math.hypot(offset[0], offset[1])
-            normal = [dim / offset_length for dim in offset]
-            normals[edge.key()] = normal
-        return normals
 
-
-class Box():
+class DagBox():
     _ns_text = (
         '<TD WIDTH="{width}" HEIGHT="{height}" '
         'PORT="{d}{idx}">{d}{idx}</TD>')
@@ -382,7 +396,7 @@ class Box():
         for d, n in self._ports.items():
             for idx in range(n):
                 self._port_attrs[
-                    (d, idx)] = Port(self, d, idx)
+                    (d, idx)] = DagPort(self, d, idx)
 
     def get_port(self, d, idx):
         return self._port_attrs[(d, idx)]
@@ -441,6 +455,7 @@ class DiGraph():
         self._edges = {}
         self._nodes = {}
         self._boxes = {}
+        self._groups = {}
         self._ports = {}
         self._node_edges = {}
         self._node_edges = {}
@@ -466,6 +481,10 @@ class DiGraph():
     def get_edge(self, edge_key):
         return self._edges[edge_key]
 
+    def add_group(self, group):
+        group.set_graph(self)
+        self._groups[group._id] = group
+
     def add_node(self, node):
         node.set_graph(self)
         self._nodes[node._id] = node
@@ -479,6 +498,25 @@ class DiGraph():
         if not node_key.startswith('box_'):
             node_key = 'box_%s' % node_key
         return self._boxes[node_key]
+
+    def get_group(self, node_key):
+        if not node_key.startswith('group_'):
+            node_key = 'group_%s' % node_key
+        return self._groups[node_key]
+
+    def get_object(self, key):
+        try:
+            return self.get_node(key)
+        except:
+            pass
+        try:
+            return self.get_box(key)
+        except:
+            pass
+        try:
+            return self.get_group(key)
+        except:
+            pass
 
     def iter_nodes(self):
         return [(k[len('node_'):], v)
@@ -600,7 +638,6 @@ class DiGraph():
                     node_groups[node] = idx
             for node in self._nodes.values():
                 groupname = node._rank_family or node_groups.get(node, 'main')
-                print node._rank_family
                 rank_family.setdefault(
                     'group%s' % groupname, []).append(node)
             for box in self._boxes.values():
@@ -661,7 +698,7 @@ class DiGraph():
 
         for line in dot_text.splitlines():
             if line.count('cluster'):
-                print line
+                pass # print line
         for line in plain_text.splitlines():
             line = line.strip()
             if not line.startswith('node'):
@@ -697,7 +734,7 @@ def test():
         node_mode['selected']['fill'] = [155, 155, 155, 255]
         node_mode['hover']['pen'] = [255, 255, 255, 255]
         node_mode['hover']['fill'] = [255, 255, 255, 255]
-        k = Node(random_key(), random.choice(clus), node_data={'modes': node_mode})
+        k = DagNode(random_key(), random.choice(clus), node_data={'modes': node_mode})
         digraph.add_node(k)
         n.append(k)
 
@@ -709,20 +746,20 @@ def test():
             edge_mode['hover']['pen'] = [255, 255, 255, 255]
             edge_mode['selected']['pen'] = [155, 155, 155, 255]
             conn = random.choice(n)
-            e = Edge(node, conn, edge_data={'modes': edge_mode})
+            e = DagEdge(node, conn, edge_data={'modes': edge_mode})
             digraph.add_edge(e)
 
-    b = Box('sample_box', (150, 80),
+    b = DagBox('sample_box', (150, 80),
             {'n': 3, 's': 2, 'w': 4, 'e': 5},
             random.choice(clus),
             box_data={'modes': node_mode})
     digraph.add_box(b)
 
-    e = Edge(b.get_port('n', 1), random.choice(n))
+    e = DagEdge(b.get_port('n', 1), random.choice(n))
     digraph.add_edge(e)
 
     for i in range(2):
-        e = Edge(b.get_port('e', 0), random.choice(n))
+        e = DagEdge(b.get_port('e', 0), random.choice(n))
         digraph.add_edge(e)
 
     digraph.process_dot()

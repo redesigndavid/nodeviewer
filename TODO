@@ -17,7 +17,10 @@ DONE 16. prettify labels with styles
 DONE 17. need something that decides how a label is aligned 
 DONE 18. need to unparent labels because layers stop working otherwise
 DONE 9. add more shapes diamond, hexagon, star
-5. and onclick show details
-6. keyboard short cuts
+DONE 6. keyboard bindings
+DONE 19. select deselect smarts
+DONE 20. group and ungroup 
+21. 2 to 3 letter icon displays
 11. lower complexity 
-19. select deselect smarts
+5. and onclick show details
+22. json style input

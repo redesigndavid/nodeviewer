@@ -1210,7 +1210,7 @@ def test():
             (random.random() * 150) + 55,
             random.random() * 10,
             255]
-        k = dag.Node(random_title(), random.choice(clus), node_data={})
+        k = dag.DagNode(random_title(), random.choice(clus), node_data={})
         k.style().set_attribute('fill_color', color, 'normal')
         k.style().set_attribute('pen_color', [0,color[1]*0.9,0,255], 'normal')
         k.style().set_attribute(
@@ -1228,14 +1228,14 @@ def test():
             conn = random.choice(n)
             while node == conn:
                 conn = random.choice(n)
-            e = dag.Edge(node, conn, edge_data={})
+            e = dag.DagEdge(node, conn, edge_data={})
             e.style().set_attribute('fill_color', color, 'normal')
             e.style().set_attribute('pen_color', color, 'normal')
             e.style().set_attribute('arrow_width', 5 + (random.random() * 8), 'normal')
             e.style().set_attribute('line_width', 2 + (random.random() * 3), 'normal')
             digraph.add_edge(e)
 
-    b = dag.Box('sample_box', (100, 150),
+    b = dag.DagBox('sample_box', (100, 150),
                 {'n': 0, 's': 1, 'w': 3, 'e': 2},
                 random.choice(clus),
                 box_data={})
@@ -1248,19 +1248,19 @@ def test():
         port.set_label(random_title())
 
     for i in range(3):
-        e = dag.Edge(b.get_port('w', i), random.choice(n), 100)
+        e = dag.DagEdge(b.get_port('w', i), random.choice(n), 100)
         e.style().set_attribute('line_style', 'dash', style._all_states)
         e.style().set_attribute('pen_color', [251, 250, 250, 255], 'normal')
         digraph.add_edge(e)
 
     for i in range(2):
-        e = dag.Edge(random.choice(n), random.choice(b.get_ports()))
+        e = dag.DagEdge(random.choice(n), random.choice(b.get_ports()))
         e.style().set_attribute('line_style', 'dot', style._all_states)
         e.style().set_attribute('pen_color', [251, 250, 250, 255], 'normal')
         digraph.add_edge(e)
 
     for i in range(2):
-        e = dag.Edge(b.get_port('e', 0), random.choice(n))
+        e = dag.DagEdge(b.get_port('e', 0), random.choice(n))
         e.style().set_attribute('line_style', 'dot', style._all_states)
         e.style().set_attribute('pen_color', [250, 250, 250, 255], 'normal')
         digraph.add_edge(e)

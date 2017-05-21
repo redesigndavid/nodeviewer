@@ -58,12 +58,12 @@ class Style():
         d = dict((state, value) for state in states)
         self._styles.setdefault(attribute_name, {}).update(d)
 
-    def get_value(self, attr_name, state):
+    def get_value(self, attr_name, state, default=None):
         value = self._styles.get(attr_name, {}).get(state)
         if not value and self._defaults:
             value = self._defaults.get_value(attr_name, state)
         if not value:
-            value = _global_defaults.get(attr_name, state)
+            value = _global_defaults.get(attr_name, default)
         return value
 
     def __repr__(self):
@@ -94,6 +94,44 @@ class NodeStyle(Style):
     _defaults.set_attribute('label_pen_color', (25, 0, 0, 255), _all_states)
     _defaults.set_attribute('label_line_width', 1, _all_states)
 
+    _defaults.set_attribute('label_alignment', 'above', 'selected')
+    _defaults.set_attribute('label_fill_color', (125, 125, 0, 255), 'selected')
+    _defaults.set_attribute('label_font_color', (0, 125, 0, 255), 'selected')
+    _defaults.set_attribute('label_pen_color', (125, 125, 0, 255), 'selected')
+    _defaults.set_attribute('label_line_width', 2, 'selected')
+
+    _defaults.set_attribute(
+        'fill_color', (255, 205, 205, 255),
+        'consider_selection')
+    _defaults.set_attribute(
+        'pen_color', (255, 205, 205, 255),
+        'consider_selection')
+
+    _defaults.set_attribute('fill_color', (255, 255, 255, 255), 'selected')
+    _defaults.set_attribute('pen_color', (255, 255, 255, 255), 'selected')
+
+    _defaults.set_attribute('fill_color', (120, 255, 255, 255), 'hover')
+    _defaults.set_attribute('pen_color', (120, 255, 255, 255), 'hover')
+
+    _defaults.set_attribute('fill_color', (255, 255, 255, 255), 'click')
+    _defaults.set_attribute('pen_color', (255, 255, 255, 255), 'click')
+
+
+class GroupStyle(NodeStyle):
+
+    _defaults = Style()
+    _defaults.set_attribute('shape', 'round', _all_states)
+    _defaults.set_attribute('size', [20, 20], _all_states)
+    _defaults.set_attribute('peripheries', 1, _all_states)
+    _defaults.set_attribute('fill_color', (255, 200, 0, 255), _all_states)
+    _defaults.set_attribute('pen_color', (255, 100, 0, 255), _all_states)
+    _defaults.set_attribute('line_width', 1, _all_states)
+
+    _defaults.set_attribute('label_alignment', 'below', _all_states)
+    _defaults.set_attribute('label_fill_color', (25, 125, 0, 255), _all_states)
+    _defaults.set_attribute('label_font_color', (5, 25, 0, 255), _all_states)
+    _defaults.set_attribute('label_pen_color', (25, 0, 0, 255), _all_states)
+    _defaults.set_attribute('label_line_width', 1, _all_states)
     _defaults.set_attribute('label_alignment', 'above', 'selected')
     _defaults.set_attribute('label_fill_color', (125, 125, 0, 255), 'selected')
     _defaults.set_attribute('label_font_color', (0, 125, 0, 255), 'selected')
