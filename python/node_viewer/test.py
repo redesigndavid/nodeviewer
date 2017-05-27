@@ -1,6 +1,6 @@
 import sys
 from PyQt4.QtGui import QApplication
-from node_viewer import NodeViewer
+from node_viewer import NodeViewerLayout
 from node_viewer import style
 import random
 
@@ -1210,15 +1210,24 @@ def test():
             (random.random() * 150) + 55,
             random.random() * 10,
             255]
-        k = dag.DagNode(random_title(), random.choice(clus), node_data={})
+        title = random_title()
+        short = "%s%s" % (title.split()[0].upper()[0],
+                          title.split()[-1].upper()[0])
+        k = dag.DagNode(title, random.choice(clus), node_data={}, icon_text=short)
+
         k.style().set_attribute('fill_color', color, 'normal')
         k.style().set_attribute('pen_color', [0,color[1]*0.9,0,255], 'normal')
+        k.style().set_attribute('font_color', [0,color[1]*0.6,0,255], 'normal')
         k.style().set_attribute(
             'shape', random.choice(['star', 'rect', 'hexa', 'penta', 'round']), '_all_states_')
+        hsize = (random.random() * 5) + 15
         k.style().set_attribute(
             'size',
-            [(random.random() * 5) + 15, (random.random() * 5) + 15],
+            [hsize, (random.random() * 5) + 15],
             '_all_states_')
+        k.style().set_attribute(
+            'font_size', hsize * 0.8, '_all_states_')
+
         digraph.add_node(k)
         n.append(k)
 
@@ -1239,6 +1248,7 @@ def test():
                 {'n': 0, 's': 1, 'w': 3, 'e': 2},
                 random.choice(clus),
                 box_data={})
+    b._label = 'box hello'
     color = [200, 200, 150, 255]
     b.style().set_attribute('fill_color',  color, 'normal')
     b.style().set_attribute('pen_color',  color, 'normal')
@@ -1267,7 +1277,7 @@ def test():
     digraph.process_dot()
 
     app = QApplication(sys.argv)
-    w = NodeViewer()
+    w = NodeViewerLayout()
     w.set_node_data(digraph)
     w.resize(450, 750)
     w.move(100, 100)

@@ -237,6 +237,8 @@ class Node(QGraphicsPathItem, object):
 
         self._dag_node.set_ui(self)
 
+        self._icon_text = node._icon_text
+
         self.setAcceptsHoverEvents(True)
         self.setFlag(QGraphicsItem.ItemIsSelectable)
         if self.movable:
@@ -366,13 +368,25 @@ class Node(QGraphicsPathItem, object):
         fill_color = self.style().get_value('fill_color', self.state())
         pen_color = self.style().get_value('pen_color', self.state())
         pen_width = self.style().get_value('line_width', self.state())
+
         pen = QPen(QColor(*pen_color))
         pen.setWidth(pen_width)
         pen.setJoinStyle(Qt.MiterJoin)
         painter.setPen(pen)
         painter.setBrush(QColor(*fill_color))
-
         painter.drawPath(self._path)
+
+        font_color = self.style().get_value('font_color', self.state())
+        font_size = self.style().get_value('font_size', self.state())
+        pen = QPen(QColor(*font_color))
+        font = painter.font()
+        font.setPointSizeF(font_size)
+        painter.setFont(font)
+        painter.setPen(pen)
+        painter.drawText(
+            QRect(-10, -10, 20, 22.5),
+            Qt.AlignCenter,
+            QString(self._icon_text))
 
     def setPos(self, x, y):
         super(Node, self).setPos(x, y)
@@ -501,7 +515,46 @@ class Box(Node):
             port.ui().update()
 
 
+class NodeViewerLayout(QWidget):
+    def __init__(self, *args, **kwargs):
+        super(NodeViewerLayout, self).__init__(*args, **kwargs)
+        self._node_viewer = NodeViewer()
+        self._text_widget = QTextBrowser()
+        self._text_widget.setStyleSheet("background-color: grey;")
+        self._node_viewer.new_info.connect(self.display_new_info)
+        layout = QHBoxLayout(self)
+        layout.setSpacing(0)
+        layout.setMargin(0)
+        layout.addWidget(self._node_viewer, 1000)
+        layout.addWidget(self._text_widget, 300)
+        self.setLayout(layout)
+
+    def set_node_data(self, graph):
+        self._node_viewer.set_node_data(graph)
+        self._text_widget.setHtml(
+            """
+            <style> body {background:black} </style>
+            <p>The <div style='color:red'>quick</div> <strong>brown</strong> fox</p>
+            <p>asdfThe <div style='color:red'>quick</div> <strong>brown</strong> fox</p>
+            <p>Theasdf <div style='color:red'>quick</div> <strong>brown</strong> fox</p>
+            <p>asdfThe <div style='color:red'>quick</div> <strong>brown</strong> fox</p>
+            <p>The <div style='color:red'>quick</div> <strong>brown</strong> fox</p>
+            <p>The <div style='color:red'>quick</div> <strong>brown</strong> fox</p>
+            <p>The <div style='color:red'>quick</div> <strong>brown</strong> fox</p>
+            <p>The <div style='color:red'>quick</div> <strong>brown</strong> fox</p>
+            <p>The <div style='color:red'>quick</div> <strong>brown</strong> fox</p>
+            <p>The <div style='color:red'>quick</div> <strong>brown</strong> fox</p>
+            <p>The <div style='color:red'>quick</div> <strong>brown</strong> fox</p>
+            """)
+
+    def display_new_info(self, text):
+        self._text_widget.setHtml(text)
+
+
 class NodeViewer(QGraphicsView):
+
+    new_info = pyqtSignal(str)
+
     def __init__(self, *args, **kwargs):
         super(NodeViewer, self).__init__(*args, **kwargs)
         self._nodedata = None
@@ -510,7 +563,7 @@ class NodeViewer(QGraphicsView):
         self.scene.selectionChanged.connect(self._quick_selection_changed)
         self.setScene(self.scene)
 
-        self.setRenderHints(QPainter.Antialiasing)
+        # self.setRenderHints(QPainter.Antialiasing)
         self.setResizeAnchor(QGraphicsView.AnchorViewCenter)
         self.setDragMode(QGraphicsView.RubberBandDrag)
         self.setViewportUpdateMode(QGraphicsView.BoundingRectViewportUpdate)
@@ -521,7 +574,7 @@ class NodeViewer(QGraphicsView):
         self._last_selected = []
         self.selected_items = []
         self.considered_selection = []
-        self.fake_selection = []
+        self.pseudo_selection = []
 
         self._dirty_edges = set([])
         self._dirty_nodes = set([])
@@ -573,6 +626,10 @@ class NodeViewer(QGraphicsView):
 
         self._last_selected = self.selected_items[:]
         self.considered_selection = []
+        if len(self._last_selected):
+            self.new_info.emit(str(len(self._last_selected)))
+        else:
+            self.new_info.emit('')
 
     def key_action_focus(self):
         nodes = [
@@ -587,6 +644,8 @@ class NodeViewer(QGraphicsView):
         nodes = [
             node for node in self._last_selected
             if node._dag_node.key().startswith('node')]
+        if len(nodes) < 2:
+            return
 
         def add_group(nodes):
             dag_group = dag.DagGroup('group', [n._dag_node for n in nodes])
@@ -595,7 +654,7 @@ class NodeViewer(QGraphicsView):
             midpoint = dag_group.middle_point()
             group.setPos(midpoint[0], midpoint[1])
             self.scene.addItem(group)
-            self.fake_selection.append(group)
+            self.pseudo_selection.append(group)
 
             for node in nodes:
                 node._dag_node._hidden = True
@@ -608,7 +667,7 @@ class NodeViewer(QGraphicsView):
                     self._dirty_edges.add(edge.key())
 
         add_group(nodes)
-        self.move_fake_selection()
+        self.move_pseudo_selection()
 
     def key_action_ungroup(self):
         groups = [
@@ -631,16 +690,16 @@ class NodeViewer(QGraphicsView):
             return [node.ui() for node in group._dag_node._nodes]
 
         for grp in groups:
-            self.fake_selection.extend(ungroup(grp))
+            self.pseudo_selection.extend(ungroup(grp))
 
-        for item in self.fake_selection:
+        for item in self.pseudo_selection:
             item.setSelected(True)
 
-        self.move_fake_selection()
+        self.move_pseudo_selection()
 
-    def move_fake_selection(self):
+    def move_pseudo_selection(self):
         pos = self.mapToScene(QCursor().pos())
-        for item in self.fake_selection:
+        for item in self.pseudo_selection:
             item.setPos(
                 pos.x() + item._dag_node._group_offset[0],
                 pos.y() + item._dag_node._group_offset[1])
@@ -653,7 +712,7 @@ class NodeViewer(QGraphicsView):
 
     def mouseMoveEvent(self, event):
         super(NodeViewer, self).mouseMoveEvent(event)
-        self.move_fake_selection()
+        self.move_pseudo_selection()
 
     def keyPressEvent(self, event):
         key = event.key()
@@ -695,7 +754,7 @@ class NodeViewer(QGraphicsView):
         self.setDragMode(QGraphicsView.RubberBandDrag)
         self.setResizeAnchor(QGraphicsView.AnchorViewCenter)
         self._selection_changed()
-        self.fake_selection = []
+        self.pseudo_selection = []
 
     def wheelEvent(self, event):
         factor = math.pow(2.0, - event.delta() / 240.0)
@@ -734,7 +793,6 @@ class NodeViewer(QGraphicsView):
             self.scale(1.8, 1.8)
         else:
             self.scale(scale, scale)
-
 
     def set_node_data(self, graph):
 

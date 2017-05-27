@@ -1,2 +1,2 @@
 
-from .interface import NodeViewer
+from .interface import NodeViewerLayout

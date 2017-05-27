@@ -38,8 +38,10 @@ class DagNode(object):
     _class = 'node'
     _style_generator = style.NodeStyle
 
-    def __init__(self, node_label, rank_family=None, node_data=None, uid=None):
+    def __init__(self, node_label, rank_family=None,
+                 node_data=None, icon_text='', uid=None):
         self._label = node_label
+        self._icon_text = icon_text
         self._id = '%s_%s' % (self._class, uid or unique_key())
         self._rank_family = rank_family
         self._pos = [0, 0]
@@ -232,6 +234,7 @@ class DagPort(DagNode):
         self._label = 'port'
         self._hidden = False
         self._old_ui = None
+        self._icon_text = ''
 
     def label(self):
         return self._label
@@ -338,6 +341,7 @@ class DagBox():
         self.create_ports()
         self._style = style.NodeStyle()
         self._label = 'box'
+        self._icon_text = ''
 
     def label(self):
         return self._label
