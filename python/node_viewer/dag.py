@@ -50,6 +50,7 @@ class DagNode(object):
         self._hidden = False
         self._group = None
         self._old_ui = None
+        self._group_offset = [0, 0]
 
     def label(self):
         return self._label
@@ -161,6 +162,15 @@ class DagGroup(DagNode):
     def __init__(self, node_label, nodes, rank_family=None, node_data=None, uid=None):
         DagNode.__init__(self, node_label, rank_family, node_data, uid)
         self._nodes = nodes
+        posx = sum([node.ui().pos().x() for node in nodes]) / len(nodes)
+        posy = sum([node.ui().pos().y() for node in nodes]) / len(nodes)
+        self._middle_point = [posx, posy]
+        for node in nodes:
+            node._group_offset = [
+                node._pos[0] - posx, node._pos[1] - posy]
+
+    def middle_point(self):
+        return self._middle_point
 
     def iter_edges(self):
         edges = []
@@ -505,6 +515,7 @@ class DiGraph():
         return self._groups[node_key]
 
     def get_object(self, key):
+
         try:
             return self.get_node(key)
         except:
@@ -517,6 +528,9 @@ class DiGraph():
             return self.get_group(key)
         except:
             pass
+        if ':' in key:
+            keys = [k.strip('"') for k in key.split(':')]
+            return self.get_box(keys[0]) or self.get_box(keys[1])
 
     def iter_nodes(self):
         return [(k[len('node_'):], v)

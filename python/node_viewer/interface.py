@@ -8,7 +8,7 @@ from PyQt4.QtCore import *
 if not hasattr(Qt, 'MiddleButton'):
     Qt.MiddleButton = Qt.MidButton
 
-_layers = {'labels': -100,
+_layers = {'labels': 100,
            'edges': 2,
            'ports': 4,
            'boxes': 1,
@@ -486,6 +486,20 @@ class Box(Node):
         self._node_view.mark_edges_dirty(nodes, fast=True)
         self.node_label.update_pos()
 
+    def update(self):
+        state = self.state()
+        if state in ('hover', 'selected'):
+            self.node_label.setVisible(True)
+        else:
+            self.node_label.setVisible(False)
+        self.node_label.update()
+        super(Node, self).update()
+        ports = self._dag_node.get_ports()
+        for port in ports:
+            if not port.ui():
+                continue
+            port.ui().update()
+
 
 class NodeViewer(QGraphicsView):
     def __init__(self, *args, **kwargs):
@@ -506,6 +520,8 @@ class NodeViewer(QGraphicsView):
         self.inherit_selection = []
         self._last_selected = []
         self.selected_items = []
+        self.considered_selection = []
+        self.fake_selection = []
 
         self._dirty_edges = set([])
         self._dirty_nodes = set([])
@@ -520,27 +536,13 @@ class NodeViewer(QGraphicsView):
 
         for item in self.selected_items:
             item.set_state('consider_selection')
-
-    def _get_selected_boxnodes(self):
-        self._selected_boxnodes = [
-            item for item in self.scene.selectedItems()
-            if isinstance(item, (Node, Box))]
-        return self._selected_boxnodes
-
-    def _get_selected_edges(self):
-        selected_nodes = self._selected_boxnodes
-        selected_edges = []
-        for edge in self._edges.values():
-
-            if edge.isSelected():
-                if selected_nodes:
-                    edge.setSelected(False)
-                else:
-                    selected_edges.append(edge)
-        return selected_edges
+            self.considered_selection.append(item)
 
     def _selection_changed(self):
-        all_items = self.selected_items[:] + self._last_selected[:]
+        all_items = (
+            self.selected_items[:] +
+            self._last_selected[:])
+
         modifiers = QApplication.keyboardModifiers()
         if modifiers == Qt.ShiftModifier:
             self.selected_items.extend(self._last_selected)
@@ -549,6 +551,8 @@ class NodeViewer(QGraphicsView):
 
         types = set([type(item) for item in all_items])
         unselect_edges = (ArrowLine in types) and (len(types) > 1)
+
+        all_items += self.considered_selection[:]
 
         self.inherit_selection = []
         for item in all_items:
@@ -568,6 +572,7 @@ class NodeViewer(QGraphicsView):
                 item.set_state('normal')
 
         self._last_selected = self.selected_items[:]
+        self.considered_selection = []
 
     def key_action_focus(self):
         nodes = [
@@ -584,14 +589,13 @@ class NodeViewer(QGraphicsView):
             if node._dag_node.key().startswith('node')]
 
         def add_group(nodes):
-            posx = sum([node.pos().x() for node in nodes]) / len(nodes)
-            posy = sum([node.pos().y() for node in nodes]) / len(nodes)
-            pos = QPointF(posx, posy)
             dag_group = dag.DagGroup('group', [n._dag_node for n in nodes])
             self._graph.add_group(dag_group)
             group = Group(self, dag_group)
-            group.setPos(posx, posy)
+            midpoint = dag_group.middle_point()
+            group.setPos(midpoint[0], midpoint[1])
             self.scene.addItem(group)
+            self.fake_selection.append(group)
 
             for node in nodes:
                 node._dag_node._hidden = True
@@ -604,30 +608,52 @@ class NodeViewer(QGraphicsView):
                     self._dirty_edges.add(edge.key())
 
         add_group(nodes)
+        self.move_fake_selection()
 
     def key_action_ungroup(self):
         groups = [
             node for node in self._last_selected
             if isinstance(node, Group)]
+
         def ungroup(group):
+
             for node in group._dag_node._nodes:
                 node._hidden = False
                 node._group = None
                 node.set_ui(node._old_ui)
                 node.ui().show()
-
                 for edge in node.iter_edges():
                     self._dirty_edges.add(edge.key())
 
             group.node_label.hide()
             group.hide()
             self.scene.removeItem(group)
+            return [node.ui() for node in group._dag_node._nodes]
 
         for grp in groups:
-            ungroup(grp)
+            self.fake_selection.extend(ungroup(grp))
+
+        for item in self.fake_selection:
+            item.setSelected(True)
+
+        self.move_fake_selection()
+
+    def move_fake_selection(self):
+        pos = self.mapToScene(QCursor().pos())
+        for item in self.fake_selection:
+            item.setPos(
+                pos.x() + item._dag_node._group_offset[0],
+                pos.y() + item._dag_node._group_offset[1])
+            for edge in item._dag_node.iter_edges():
+                self._dirty_edges.add(edge.key())
+            self._dirty_nodes.add(item._dag_node.key())
 
     def key_action_quit(self):
         QApplication.quit()
+
+    def mouseMoveEvent(self, event):
+        super(NodeViewer, self).mouseMoveEvent(event)
+        self.move_fake_selection()
 
     def keyPressEvent(self, event):
         key = event.key()
@@ -669,6 +695,7 @@ class NodeViewer(QGraphicsView):
         self.setDragMode(QGraphicsView.RubberBandDrag)
         self.setResizeAnchor(QGraphicsView.AnchorViewCenter)
         self._selection_changed()
+        self.fake_selection = []
 
     def wheelEvent(self, event):
         factor = math.pow(2.0, - event.delta() / 240.0)
@@ -797,13 +824,14 @@ class NodeViewer(QGraphicsView):
             line.update()
 
         for node_key in list(self._dirty_nodes)[:100]:
-            if not node_key.startswith(('node_', 'box_', 'group_')):
+            if not node_key.count(':') and not node_key.startswith(('node_', 'box_', 'group_')):
                 if node_key.count(':'):
                     # clean up ports
                     self._dirty_nodes.remove(node_key)
                 continue
             obj = self._graph.get_object(node_key)
             if not obj:
+                print 'no %s' % node_key
                 continue
 
             obj.ui().update()
