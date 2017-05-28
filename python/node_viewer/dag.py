@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-import uuid
+
+
 import subprocess
 import math
 from node_viewer import style
@@ -53,15 +54,25 @@ class DagNode(object):
         self._group = None
         self._old_ui = None
         self._group_offset = [0, 0]
+        self._repeller = None
+
+    def node_type(self):
+        return self._class
 
     def label(self):
         return self._label
+
+    def set_data(self, data):
+        self._node_data = data
+
+    def set_label(self, label_text):
+        self._label = label_text
 
     def style(self):
         return self._style
 
     def repeller(self):
-        return None
+        return self._repeller
 
     def set_ui(self, item):
         self._ui = item
@@ -70,8 +81,7 @@ class DagNode(object):
         return self._ui
 
     def ui_pos(self):
-        pos = self.ui().pos()
-        return [pos.x(), pos.y()]
+        return self._pos
 
     def set_graph(self, graph):
         self._graph = graph
@@ -92,10 +102,11 @@ class DagNode(object):
         # gather node's edge's normals
         normals = {}
         for edge in self.iter_edges():
-            is_forwards = (edge._src.key() == self.key())
+            src, dst = edge.absolute_srcdst()
+            is_forwards = (src.key() == self.key())
             offset = [
-                edge._src.ui_pos()[0] - edge._dst.ui_pos()[0],
-                edge._src.ui_pos()[1] - edge._dst.ui_pos()[1]]
+                src.ui_pos()[0] - dst.ui_pos()[0],
+                src.ui_pos()[1] - dst.ui_pos()[1]]
             if not is_forwards:
                 offset = [dim * -1 for dim in offset]
             offset_length = math.hypot(offset[0], offset[1])
@@ -161,12 +172,17 @@ class DagGroup(DagNode):
     _class = 'group'
     _style_generator = style.GroupStyle
 
-    def __init__(self, node_label, nodes, rank_family=None, node_data=None, uid=None):
-        DagNode.__init__(self, node_label, rank_family, node_data, uid)
+    def __init__(self, node_label, nodes, rank_family=None,
+                 node_data=None, uid=None):
+
+        super(DagGroup, self).__init__(
+            node_label, rank_family, node_data, uid=uid)
+
         self._nodes = nodes
-        posx = sum([node.ui().pos().x() for node in nodes]) / len(nodes)
-        posy = sum([node.ui().pos().y() for node in nodes]) / len(nodes)
+        posx = sum([node.ui_pos()[0] for node in nodes]) / len(nodes)
+        posy = sum([node.ui_pos()[1] for node in nodes]) / len(nodes)
         self._middle_point = [posx, posy]
+        self._icon_text = 'G'
         for node in nodes:
             node._group_offset = [
                 node._pos[0] - posx, node._pos[1] - posy]
@@ -181,69 +197,25 @@ class DagGroup(DagNode):
         return edges
 
 
-class DagEdge():
-    def __init__(self, s, d, w=1, edge_data=None):
-        self._src = s
-        self._dst = d
-        self._weight = w
-        self._edge_data = edge_data or {}
-        self._ui = None
-        self._style = style.EdgeStyle()
-
-    def style(self):
-        return self._style
-
-    def set_ui(self, item):
-        self._ui = item
-
-    def ui(self):
-        return self._ui
-
-    def set_src(self, src):
-        self._src = src
-
-    def set_dst(self, dst):
-        self._dst = dst
-
-    @memoize
-    def key(self):
-        return "%s->%s" % (self._src.key(), self._dst.key())
-
-    @memoize
-    def dot_text(self):
-        return "\n%s" % ("%s -> %s [weight=%s];" % (
-            self._src.key(),
-            self._dst.key(),
-            self._weight))
-
-
 class DagPort(DagNode):
+
+    _class = 'port'
+    _style_generator = style.NodeStyle
 
     def __init__(self, box, d, idx):
         self._box = box
         self._box_key = box.key()
+        DagNode.__init__(self, 'port', None, {}, self._box_key)
         self._d = d
         self._idx = idx
         self._ui = None
-        self._style = style.NodeStyle()
+
         self._repeller = {
             'n': [0, -1],
             's': [0, 1],
             'e': [1, 0],
             'w': [-1, 0]}[self._d]
-        self._label = 'port'
-        self._hidden = False
-        self._old_ui = None
-        self._icon_text = ''
-
-    def label(self):
-        return self._label
-
-    def set_label(self, label_text):
-        self._label = label_text
-
-    def set_pos(self, *args, **kwargs):
-        pass
+        self._group = False
 
     @memoize
     def iter_edge_connections(self):
@@ -275,21 +247,9 @@ class DagPort(DagNode):
         pos = self._box.ui_pos()
         self._pos = [pos[0] + offset[0], pos[1] + offset[1]]
 
-    def repeller(self):
-        return self._repeller
-
-    def ui_pos(self):
-        return self._pos
-
     @memoize
     def key(self):
         return '"%s":"%s%s"' % (self._box_key, self._d, self._idx)
-
-    def set_ui(self, item):
-        self._ui = item
-
-    def ui(self):
-        return self._ui
 
     @memoize
     def iter_edges(self):
@@ -299,7 +259,9 @@ class DagPort(DagNode):
                     self.key(), [])]
 
 
-class DagBox():
+class DagBox(DagNode):
+    _class = 'box'
+    _style_generator = style.BoxStyle
     _ns_text = (
         '<TD WIDTH="{width}" HEIGHT="{height}" '
         'PORT="{d}{idx}">{d}{idx}</TD>')
@@ -326,31 +288,17 @@ class DagBox():
         '</TR>'
         '</TABLE>')
 
-    def __init__(self, n, dim, ports, rank_family=None, box_data=None, uid=None):
-        self._id = 'box_%s' % (uid or unique_key())
+    def __init__(self, n, dim, ports, rank_family=None, node_data=None, uid=None):
+        DagNode.__init__(
+            self, n, rank_family=rank_family, node_data=node_data)
         self._ports = ports
-        self._rank_family = rank_family
-        self._box_data = box_data or {}
-        self._node_data = box_data  # temp
         self._port_attrs = {}
-        self._pos = [0, 0]
-        self._graph = None
-        self._ui = None
         self._dim = dim
         self.set_dim(dim)
         self.create_ports()
-        self._style = style.NodeStyle()
-        self._label = 'box'
-        self._icon_text = ''
-
-    def label(self):
-        return self._label
 
     def get_edge_normals(self):
         return {}
-
-    def style(self):
-        return self._style
 
     def set_dim(self, dim):
         self._dim = dim
@@ -367,6 +315,7 @@ class DagBox():
             port.calc_pos()
         self._ui = item
 
+    @memoize
     def iter_edge_connections(self):
         edge_connections = set([])
         for port in self._port_attrs.values():
@@ -376,35 +325,18 @@ class DagBox():
 
         return list(edge_connections)
 
+    @memoize
     def iter_edges(self):
         edges = []
         for port in self._port_attrs.values():
             edges.extend(port.iter_edges())
         return edges
 
-    def ui(self):
-        return self._ui
-
-    def ui_pos(self):
-        return self._pos
-
-    def set_graph(self, graph):
-        self._graph = graph
-
-    def graph(self):
-        return self._graph
-
     def set_pos(self, pos):
         self._pos = pos
         for port in self._port_attrs.values():
             # update ports
             port.calc_pos()
-
-    def get_pos(self):
-        return self._pos
-
-    def key(self):
-        return self._id
 
     def create_ports(self):
         for d, n in self._ports.items():
@@ -464,6 +396,51 @@ class DagBox():
         return text
 
 
+class DagEdge():
+    def __init__(self, s, d, w=1, edge_data=None):
+        self._src = s
+        self._dst = d
+        self._weight = w
+        self._edge_data = edge_data or {}
+        self._ui = None
+        self._style = style.EdgeStyle()
+
+    def absolute_srcdst(self):
+        src = (self._src._group._dag_node
+               if self._src._group and self._src
+               else self._src)
+        dst = (self._dst._group._dag_node
+               if self._dst._group
+               else self._dst)
+        return src, dst
+
+    def style(self):
+        return self._style
+
+    def set_ui(self, item):
+        self._ui = item
+
+    def ui(self):
+        return self._ui
+
+    def set_src(self, src):
+        self._src = src
+
+    def set_dst(self, dst):
+        self._dst = dst
+
+    @memoize
+    def key(self):
+        return "%s->%s" % (self._src.key(), self._dst.key())
+
+    @memoize
+    def dot_text(self):
+        return "\n%s" % ("%s -> %s [weight=%s];" % (
+            self._src.key(),
+            self._dst.key(),
+            self._weight))
+
+
 class DiGraph():
     def __init__(self):
         self._edges = {}
@@ -504,49 +481,33 @@ class DiGraph():
         self._nodes[node._id] = node
 
     def get_node(self, node_key):
-        if not node_key.startswith('node_'):
-            node_key = 'node_%s' % node_key
         return self._nodes[node_key]
 
     def get_box(self, node_key):
-        if not node_key.startswith('box_'):
-            node_key = 'box_%s' % node_key
         return self._boxes[node_key]
 
     def get_group(self, node_key):
-        if not node_key.startswith('group_'):
-            node_key = 'group_%s' % node_key
         return self._groups[node_key]
 
     def get_object(self, key):
-
-        try:
+        if key.startswith('node_'):
             return self.get_node(key)
-        except:
-            pass
-        try:
+        elif key.startswith('box_'):
             return self.get_box(key)
-        except:
-            pass
-        try:
+        elif key.startswith('group_'):
             return self.get_group(key)
-        except:
-            pass
-        if ':' in key:
+        elif ':' in key:
             keys = [k.strip('"') for k in key.split(':')]
             return self.get_box(keys[0]) or self.get_box(keys[1])
 
     def iter_nodes(self):
-        return [(k[len('node_'):], v)
-                for k, v in self._nodes.items()]
+        return self._nodes.items()
 
     def iter_ports(self):
-        return [(k[len('node_'):], v)
-                for k, v in self._ports.items()]
+        return self._ports.items()
 
     def iter_boxes(self):
-        return [(k[len('box_'):], v)
-                for k, v in self._boxes.items()]
+        return self._boxes.items()
 
     def iter_edges(self):
         return self._edges.items()
@@ -600,6 +561,7 @@ class DiGraph():
 
         # look for routes with matching start and ends
         same_start_ends = {}
+
         for route in self.all_routes():
             if len(route) < 2:
                 continue
@@ -620,6 +582,7 @@ class DiGraph():
             prev = None
             group = []
             groups = []
+
             for idx in range(len(matching)):
                 if matching[idx]:
                     group.append(idx)
@@ -629,6 +592,7 @@ class DiGraph():
                     groups.append(group)
                     group = []
                 prev = matching[idx]
+
             for group in groups:
                 items = []
                 for idx in group:
@@ -646,9 +610,67 @@ class DiGraph():
             dot_text += edge.dot_text()
 
         # write in clusters
+        rank_family = self.get_rank_families(autosubgraph)
+
+        for rf, items in rank_family.items():
+            if rf != 'groupmain':
+                dot_text += "\nsubgraph cluster_%s {rank=same; nodesep=30;" % rf
+
+            for item in items:
+                dot_text += item.dot_text()
+
+            if rf != 'groupmain':
+                dot_text += "}\n"
+
+        dot_text += "}\n"
+
+        command = 'dot'
+        p = subprocess.Popen(
+            [command],
+            stdout=subprocess.PIPE,
+            stdin=subprocess.PIPE)
+        p.stdin.write(dot_text)
+        p.stdin.close()
+        dot_text = p.stdout.read()
+
+        # p = subprocess.Popen(
+        #    ['unflatten', '-l', '300', '-f', '-c', '300'],
+        #    stdin=subprocess.PIPE,
+        #    stdout=subprocess.PIPE)
+        # p.stdin.write(dot_text)
+        # p.stdin.close()
+        # dot_text = p.stdout.read()
+
+        p = subprocess.Popen(
+            [command, '-Tplain-ext'],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE)
+        p.stdin.write(dot_text)
+        p.stdin.close()
+        plain_text = p.stdout.read()
+
+        p = subprocess.Popen(
+            [command, '-Tdot', '-o', '/var/tmp/t.png.dot'],
+            stdin=subprocess.PIPE)
+        p.stdin.write(dot_text)
+        p.stdin.close()
+
+        for line in plain_text.splitlines():
+            line = line.strip()
+            if not line.startswith('node'):
+                continue
+            _, item_key, x, y = line.split()[:4]
+            item_key = item_key.strip('"')
+            if item_key in self._nodes:
+                self._nodes[item_key].set_pos((float(x) * 3, float(y) * 3))
+            else:
+                self._boxes[item_key].set_pos((float(x) * 3, float(y) * 3))
+
+    def get_rank_families(self, autosubgraph):
         rank_family = {}
         if autosubgraph:
             node_groups = {}
+
             group_nodes = dict(enumerate(self.find_matching_bookends()))
 
             for idx, node_group in group_nodes.items():
@@ -673,60 +695,7 @@ class DiGraph():
                 rank_family.setdefault(
                     box._rank_family or "main", []).append(box)
 
-        for rf, items in rank_family.items():
-            if rf != 'groupmain':
-                dot_text += "\nsubgraph cluster_%s {rank=same; nodesep=30;" % rf
-
-            for item in items:
-                dot_text += item.dot_text()
-            if rf != 'groupmain':
-                dot_text += "}\n"
-
-        dot_text += "}\n"
-        command = 'dot'
-        p = subprocess.Popen(
-            [command],
-            stdout=subprocess.PIPE,
-            stdin=subprocess.PIPE)
-        p.stdin.write(dot_text)
-        p.stdin.close()
-        dot_text = p.stdout.read()
-
-        p = subprocess.Popen(
-            ['unflatten', '-l', '300', '-f', '-c', '300'],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE)
-        p.stdin.write(dot_text)
-        p.stdin.close()
-        dot_text = p.stdout.read()
-
-        p = subprocess.Popen(
-            [command, '-Tplain-ext'],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE)
-        p.stdin.write(dot_text)
-        p.stdin.close()
-        plain_text = p.stdout.read()
-
-        p = subprocess.Popen(
-            [command, '-Tdot', '-o', '/var/tmp/t.png.dot'],
-            stdin=subprocess.PIPE)
-        p.stdin.write(dot_text)
-        p.stdin.close()
-
-        for line in dot_text.splitlines():
-            if line.count('cluster'):
-                pass # print line
-        for line in plain_text.splitlines():
-            line = line.strip()
-            if not line.startswith('node'):
-                continue
-            _, item_key, x, y = line.split()[:4]
-            item_key = item_key.strip('"')
-            if item_key in self._nodes:
-                self._nodes[item_key].set_pos((float(x) * 3, float(y) * 3))
-            else:
-                self._boxes[item_key].set_pos((float(x) * 3, float(y) * 3))
+        return rank_family
 
 
 def test():
@@ -767,10 +736,11 @@ def test():
             e = DagEdge(node, conn, edge_data={'modes': edge_mode})
             digraph.add_edge(e)
 
-    b = DagBox('sample_box', (150, 80),
-            {'n': 3, 's': 2, 'w': 4, 'e': 5},
-            random.choice(clus),
-            box_data={'modes': node_mode})
+    b = DagBox(
+        'sample_box', (150, 80),
+        {'n': 3, 's': 2, 'w': 4, 'e': 5},
+        random.choice(clus),
+        node_data={'modes': node_mode})
     digraph.add_box(b)
 
     e = DagEdge(b.get_port('n', 1), random.choice(n))
@@ -801,7 +771,6 @@ def test():
 
     for group in same_source_and_end:
         print [nod.key() for nod in group]
-
 
 
 if __name__ == '__main__':

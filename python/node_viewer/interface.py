@@ -89,7 +89,7 @@ class ArrowLine(QGraphicsPathItem):
         super(QGraphicsPathItem, self).__init__(*args, **kwargs)
         self.setZValue(self.z_value)
         self.setAcceptsHoverEvents(True)
-        #self.setCacheMode(QGraphicsItem.NoCache)
+        # self.setCacheMode(QGraphicsItem.NoCache)
         self.setFlag(QGraphicsItem.ItemIsSelectable)
 
         self._dag_edge = edge
@@ -99,11 +99,20 @@ class ArrowLine(QGraphicsPathItem):
         self._points = {}
         self._dag_edge.set_ui(self)
 
+    def info(self):
+        return dict(
+            connection_info={
+                'src': self._dag_edge._src.ui().info(),
+                'dst': self._dag_edge._dst.ui().info()})
+
     def style(self):
         return self._dag_edge._style
 
-    def set_p(self, idx, p):
-        self._points[idx] = QPointF(*p)
+    def set_points(self, p0, p1, p2, p3):
+        self._points[0] = QPointF(*p0)
+        self._points[1] = QPointF(*p1)
+        self._points[2] = QPointF(*p2)
+        self._points[3] = QPointF(*p3)
 
     def make_shape(self):
         p1 = self._points[0]
@@ -248,6 +257,12 @@ class Node(QGraphicsPathItem, object):
         self.make_shape()
         self.make_label()
 
+    def info(self):
+        return dict(node_info=self._dag_node._node_data,
+                    label=self._dag_node.label(),
+                    icon_text=self._icon_text,
+                    key=self._key)
+
     def make_label(self):
         self.node_label = Label(self)
         self.update_label()
@@ -384,9 +399,14 @@ class Node(QGraphicsPathItem, object):
         painter.setFont(font)
         painter.setPen(pen)
         painter.drawText(
-            QRect(-10, -10, 20, 22.5),
+            QRect(-10, -10, 20, 20),
             Qt.AlignCenter,
             QString(self._icon_text))
+
+    def sync_pos(self):
+        x = self._dag_node.ui().pos().x()
+        y = self._dag_node.ui().pos().y()
+        self._dag_node.set_pos([x, y])
 
     def setPos(self, x, y):
         super(Node, self).setPos(x, y)
@@ -446,7 +466,7 @@ class Box(Node):
     z_value = _layers.get('boxes')
 
     def make_shape(self):
-        dim = self._dag_node._dim
+        dim = self._dag_node.get_dim()
         dim = [dim[0] * 0.5, dim[1] * 0.5]
         pen_width = self.style().get_value('line_width', self.state())
         box = QRectF(
@@ -481,7 +501,6 @@ class Box(Node):
         pen.setWidth(pen_width)
         painter.setPen(pen)
         painter.setBrush(QColor(*fill_color))
-
         painter.drawPath(self._path)
 
     def mouseMoveEvent(self, event):
@@ -548,7 +567,76 @@ class NodeViewerLayout(QWidget):
             """)
 
     def display_new_info(self, text):
+        import simplejson
+        import pygments.formatters
+        from pygments import highlight
+        import pygments.lexers
+        text = ''
+        for item in self._node_viewer.scene.selectedItems():
+            json = simplejson.dumps(item.info(), indent=2 * ' ')
+            text += '\n' + highlight(
+                json,
+                pygments.lexers.JsonLexer(),
+                pygments.formatters.HtmlFormatter())
         self._text_widget.setHtml(text)
+
+    def key_action_toggle_fullscreen(self):
+        if self.windowState() == Qt.WindowFullScreen:
+            self.showNormal()
+        else:
+            self.showFullScreen()
+
+    def key_action_toggle_info(self):
+        if self._text_widget.isVisible():
+            self._text_widget.hide()
+        else:
+            self._text_widget.show()
+
+    def key_action_search(self):
+        print 'search'
+
+    def key_action_rename(self):
+        print 'rename'
+
+    def key_action_reshape(self):
+        print 'reshape'
+
+    def key_action_test(self):
+        print 'asdf'
+
+    def key_action_quit(self):
+        QApplication.quit()
+
+    def keyPressEvent(self, event):
+
+        key = event.key()
+        modifiers = event.modifiers()
+        shift = modifiers == Qt.ShiftModifier
+        ctrl = modifiers == Qt.ControlModifier
+        alt = modifiers == Qt.AltModifier
+
+        if key == Qt.Key_F and not shift:
+            self._node_viewer.key_action_focus()
+        if key == Qt.Key_F and shift:
+            self.key_action_toggle_fullscreen()
+        elif key == Qt.Key_U:
+            self._node_viewer.key_action_ungroup()
+        elif key == Qt.Key_G:
+            self._node_viewer.key_action_group()
+        elif key == Qt.Key_Q:
+            self.key_action_quit()
+        elif key == Qt.Key_I:
+            self.key_action_toggle_info()
+        elif key == Qt.Key_Slash:
+            self.key_action_search()
+        elif key == Qt.Key_R and not shift:
+            self.key_action_rename()
+        elif key == Qt.Key_R and shift:
+            self.key_action_reshape()
+        elif key == Qt.Key_I:
+            self.key_action_toggle_info()
+        elif alt and ctrl:
+            self.key_action_test()
 
 
 class NodeViewer(QGraphicsView):
@@ -563,7 +651,8 @@ class NodeViewer(QGraphicsView):
         self.scene.selectionChanged.connect(self._quick_selection_changed)
         self.setScene(self.scene)
 
-        # self.setRenderHints(QPainter.Antialiasing)
+        self.setRenderHint(QPainter.Antialiasing, True)
+
         self.setResizeAnchor(QGraphicsView.AnchorViewCenter)
         self.setDragMode(QGraphicsView.RubberBandDrag)
         self.setViewportUpdateMode(QGraphicsView.BoundingRectViewportUpdate)
@@ -578,7 +667,6 @@ class NodeViewer(QGraphicsView):
 
         self._dirty_edges = set([])
         self._dirty_nodes = set([])
-        self._dirty_boxes = set([])
 
         self._looper = QTimer(self)
         self._looper.timeout.connect(self.new_update_lines)
@@ -643,7 +731,7 @@ class NodeViewer(QGraphicsView):
     def key_action_group(self):
         nodes = [
             node for node in self._last_selected
-            if node._dag_node.key().startswith('node')]
+            if node._dag_node.node_type() == 'node']
         if len(nodes) < 2:
             return
 
@@ -707,24 +795,9 @@ class NodeViewer(QGraphicsView):
                 self._dirty_edges.add(edge.key())
             self._dirty_nodes.add(item._dag_node.key())
 
-    def key_action_quit(self):
-        QApplication.quit()
-
     def mouseMoveEvent(self, event):
         super(NodeViewer, self).mouseMoveEvent(event)
         self.move_pseudo_selection()
-
-    def keyPressEvent(self, event):
-        key = event.key()
-
-        if key == Qt.Key_F:
-            self.key_action_focus()
-        elif key == Qt.Key_U:
-            self.key_action_ungroup()
-        elif key == Qt.Key_G:
-            self.key_action_group()
-        elif key == Qt.Key_Q:
-            self.key_action_quit()
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MiddleButton:
@@ -863,33 +936,27 @@ class NodeViewer(QGraphicsView):
 
         for edge_key in list(self._dirty_edges)[:100]:
             edge = self._graph.get_edge(edge_key)
-            src = edge._src
-            dst = edge._dst
-            if src._hidden and dst._hidden and src._group._dag_node.key() == dst._group._dag_node.key():
+            edge._src.ui().sync_pos()
+            edge._dst.ui().sync_pos()
+            src, dst = edge.absolute_srcdst()
+            if src.key() == dst.key():
                 edge.ui().hide()
                 self._dirty_edges.remove(edge_key)
                 continue
             edge.ui().show()
-            dst_normals = get_node_normals(edge._dst)[edge_key]
-            src_normals = get_node_normals(edge._src)[edge_key]
+            dst_normals = get_node_normals(dst)[edge_key]
+            src_normals = get_node_normals(src)[edge_key]
             line = edge.ui()
-            line.set_p(0, edge._src.ui_pos())
-            line.set_p(1, src_normals)
-            line.set_p(2, dst_normals)
-            line.set_p(3, edge._dst.ui_pos())
+            line.set_points(
+                src.ui_pos(), src_normals, dst_normals, dst.ui_pos())
             line.make_shape()
             self._dirty_edges.remove(edge_key)
             line.update()
 
         for node_key in list(self._dirty_nodes)[:100]:
-            if not node_key.count(':') and not node_key.startswith(('node_', 'box_', 'group_')):
-                if node_key.count(':'):
-                    # clean up ports
-                    self._dirty_nodes.remove(node_key)
-                continue
             obj = self._graph.get_object(node_key)
             if not obj:
-                print 'no %s' % node_key
+                self._dirty_nodes.remove(node_key)
                 continue
 
             obj.ui().update()

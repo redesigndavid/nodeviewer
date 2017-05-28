@@ -6,7 +6,7 @@ DONE 2. seperate normals might need to happen on
    at the same time.
 DONE 4. selection change update all colors
 DONE 7. grouping according to similar inputs and outputs
-SOME SHAPES DONE 8. add shapes
+DONE 8. add shapes
 DONE 10. bug with boxes, shape of boxes not set
 DONE 12. port positions as nodes
 DONE 13. port reposition with box
@@ -23,7 +23,10 @@ DONE 20. group and ungroup
 DONE 23. working port hovers
 DONE 24. group and ungroup follow mouse
 DONE 5. and onclick show details
-21. 2 to 3 letter icon displays
+DONE 21. 2 to 3 letter icon displays
+DONE 26. reorg 
 11. lower complexity 
 22. json style input
-26. reorg 
+27. search
+28. rename / reshape groups
+29. constants

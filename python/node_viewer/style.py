@@ -117,6 +117,9 @@ class NodeStyle(Style):
     _defaults.set_attribute('pen_color', (255, 255, 255, 255), 'click')
 
 
+class BoxStyle(NodeStyle): pass
+
+
 class GroupStyle(NodeStyle):
 
     _defaults = Style()
@@ -126,6 +129,9 @@ class GroupStyle(NodeStyle):
     _defaults.set_attribute('fill_color', (255, 200, 0, 255), _all_states)
     _defaults.set_attribute('pen_color', (255, 100, 0, 255), _all_states)
     _defaults.set_attribute('line_width', 1, _all_states)
+
+    _defaults.set_attribute('font_size', 10, _all_states)
+    _defaults.set_attribute('font_color', (0, 0, 0, 255), _all_states)
 
     _defaults.set_attribute('label_alignment', 'below', _all_states)
     _defaults.set_attribute('label_fill_color', (25, 125, 0, 255), _all_states)

@@ -1204,7 +1204,7 @@ def test():
         taken.append(key)
         return key
 
-    for i in range(900):
+    for i in range(200):
         color = [
             random.random() * 5,
             (random.random() * 150) + 55,
@@ -1213,13 +1213,20 @@ def test():
         title = random_title()
         short = "%s%s" % (title.split()[0].upper()[0],
                           title.split()[-1].upper()[0])
-        k = dag.DagNode(title, random.choice(clus), node_data={}, icon_text=short)
+        k = dag.DagNode(
+            title,
+            random.choice(clus),
+            node_data={'title': title, 'short': short},
+            icon_text=short)
 
         k.style().set_attribute('fill_color', color, 'normal')
-        k.style().set_attribute('pen_color', [0,color[1]*0.9,0,255], 'normal')
-        k.style().set_attribute('font_color', [0,color[1]*0.6,0,255], 'normal')
         k.style().set_attribute(
-            'shape', random.choice(['star', 'rect', 'hexa', 'penta', 'round']), '_all_states_')
+            'pen_color', [0, color[1]*0.9, 0, 255], 'normal')
+        k.style().set_attribute(
+            'font_color', [0, color[1]*0.6, 0, 255], 'normal')
+        k.style().set_attribute(
+            'shape', random.choice([
+                'star', 'rect', 'hexa', 'penta', 'round']), '_all_states_')
         hsize = (random.random() * 5) + 15
         k.style().set_attribute(
             'size',
@@ -1240,22 +1247,28 @@ def test():
             e = dag.DagEdge(node, conn, edge_data={})
             e.style().set_attribute('fill_color', color, 'normal')
             e.style().set_attribute('pen_color', color, 'normal')
-            e.style().set_attribute('arrow_width', 5 + (random.random() * 8), 'normal')
-            e.style().set_attribute('line_width', 2 + (random.random() * 3), 'normal')
+            e.style().set_attribute(
+                'arrow_width', 5 + (random.random() * 8), 'normal')
+            e.style().set_attribute(
+                'line_width', 2 + (random.random() * 3), 'normal')
             digraph.add_edge(e)
 
-    b = dag.DagBox('sample_box', (100, 150),
-                {'n': 0, 's': 1, 'w': 3, 'e': 2},
-                random.choice(clus),
-                box_data={})
-    b._label = 'box hello'
+    b = dag.DagBox(
+        'sample_box', (100, 150),
+        {'n': 0, 's': 1, 'w': 3, 'e': 2},
+        random.choice(clus),
+        node_data={'hello': {'foo': 'bar'}})
     color = [200, 200, 150, 255]
     b.style().set_attribute('fill_color',  color, 'normal')
     b.style().set_attribute('pen_color',  color, 'normal')
     b.style().set_attribute('label_alignment', 'above', '_all_states_')
     digraph.add_box(b)
-    for port in b.get_ports():
-        port.set_label(random_title())
+    for idx, port in enumerate(b.get_ports()):
+        t = random_title()
+        port.set_label(t)
+        port.set_data({'port': 'P%s' % idx, 'title': t})
+        port._icon_text = 'P' + str(idx)
+        port.style().set_attribute('font_size', 5, style._all_states)
 
     for i in range(3):
         e = dag.DagEdge(b.get_port('w', i), random.choice(n), 100)
