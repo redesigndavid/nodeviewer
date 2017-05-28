@@ -534,6 +534,72 @@ class Box(Node):
             port.ui().update()
 
 
+class FloatingTextBox(QGraphicsTextItem):
+
+    text_entry = pyqtSignal(str)
+    enter_pressed = pyqtSignal()
+    cancel_pressed = pyqtSignal()
+
+    def __init__(self, node_viewer, *args, **kwargs):
+        super(FloatingTextBox, self).__init__(*args, **kwargs)
+        self._node_viewer = node_viewer
+        self._node_viewer.scene.addItem(self)
+        self.setZValue(1000)
+        self.setTextInteractionFlags(Qt.TextEditable)
+        self.sync_pos()
+        self._text = ''
+
+    def sync_pos(self):
+        # self._node_viewer.scene.setFocusItem(self)
+        view_rect = QRect(
+            0, 0,
+            self._node_viewer.viewport().width(),
+            self._node_viewer.viewport().height())
+        viewport = self._node_viewer.mapToScene(
+            view_rect).boundingRect()
+        text_width = self.boundingRect().width()
+        text_height = self.boundingRect().height()
+        self.setPos(
+            viewport.x() + (viewport.width() / 2.0) - (text_width / 2.0),
+            viewport.y() + (viewport.height() / 2.0) - (text_height / 2.0))
+        font = self.font()
+        font.setPointSize(viewport.height() / 11.0)
+        self.setFont(font)
+
+        self._rect = self.boundingRect()
+        self._rect = self.boundingRect()
+        self._rect.setX(self._rect.x() - 10)
+        self._rect.setY(self._rect.y() - 10)
+        self._rect.setHeight(self._rect.height() + 20)
+        self._rect.setWidth(self._rect.width() + 20)
+
+    def keyPressEvent(self, event):
+        super(FloatingTextBox, self).keyPressEvent(event)
+        key = event.key()
+        self._text = self.toPlainText()
+        self.text_entry.emit(self._text)
+        if key == Qt.Key_Return:
+            self.enter_pressed.emit()
+            self.setPlainText('')
+        elif key == Qt.Key_Escape:
+            self.cancel_pressed.emit()
+            self.setPlainText('')
+        self.sync_pos()
+
+    def show(self):
+        super(FloatingTextBox, self).show()
+        self.sync_pos()
+
+    def paint(self, painter, *args, **kwargs):
+        pen = QPen(QColor(0, 0, 0, 255))
+        pen.setWidth(3)
+        pen.setJoinStyle(Qt.MiterJoin)
+        painter.setPen(pen)
+        painter.setBrush(QColor(230, 230, 230, 255))
+        painter.drawRect(self._rect)
+        super(FloatingTextBox, self).paint(painter, *args, **kwargs)
+
+
 class NodeViewerLayout(QWidget):
     def __init__(self, *args, **kwargs):
         super(NodeViewerLayout, self).__init__(*args, **kwargs)
@@ -566,6 +632,52 @@ class NodeViewerLayout(QWidget):
             <p>The <div style='color:red'>quick</div> <strong>brown</strong> fox</p>
             """)
 
+    def search_return(self, search):
+        self._search = str(search).strip()
+        for key, item in self._node_viewer._graph.iter_nodes():
+            if self._search.lower() in item.label().lower():
+                item.ui().set_state('consider_selection')
+                self._node_viewer.considered_selection.append(item.ui())
+            elif item.ui() in self._node_viewer.considered_selection:
+                item.ui().set_state('normal')
+                self._node_viewer.considered_selection.remove(item.ui())
+
+    def search_good(self):
+
+        self._node_viewer.scene.clearSelection()
+
+        for item in self._node_viewer.considered_selection:
+            if self._search.lower() in item._dag_node.label().lower():
+                item.set_state('selected')
+                item.setSelected(True)
+            else:
+                item.set_state('normal')
+                item.setSelected(False)
+
+        self._node_viewer._dirty_nodes.union(
+            self._node_viewer.considered_selection)
+
+        self._node_viewer._selection_changed()
+
+        self._node_viewer.text.text_entry.disconnect()
+        self._node_viewer.text.enter_pressed.disconnect()
+        self._node_viewer.text.cancel_pressed.disconnect()
+        self._node_viewer.text.hide()
+        self._node_viewer.scene.clearFocus()
+
+    def search_bad(self):
+        self._node_viewer.scene.clearSelection()
+
+        self._node_viewer._dirty_nodes.union(
+            self._node_viewer.considered_selection)
+
+        self._node_viewer._selection_changed()
+        self._node_viewer.text.text_entry.disconnect()
+        self._node_viewer.text.enter_pressed.disconnect()
+        self._node_viewer.text.cancel_pressed.disconnect()
+        self._node_viewer.text.hide()
+        self._node_viewer.scene.clearFocus()
+
     def display_new_info(self, text):
         import simplejson
         import pygments.formatters
@@ -593,7 +705,13 @@ class NodeViewerLayout(QWidget):
             self._text_widget.show()
 
     def key_action_search(self):
-        print 'search'
+        self._node_viewer.text.show()
+        self._node_viewer.text.sync_pos()
+        self._node_viewer.scene.setFocusItem(self._node_viewer.text)
+
+        self._node_viewer.text.text_entry.connect(self.search_return)
+        self._node_viewer.text.enter_pressed.connect(self.search_good)
+        self._node_viewer.text.cancel_pressed.connect(self.search_bad)
 
     def key_action_rename(self):
         print 'rename'
@@ -667,6 +785,9 @@ class NodeViewer(QGraphicsView):
 
         self._dirty_edges = set([])
         self._dirty_nodes = set([])
+
+        self.text = FloatingTextBox(self, "")
+        self.text.hide()
 
         self._looper = QTimer(self)
         self._looper.timeout.connect(self.new_update_lines)
@@ -958,9 +1079,9 @@ class NodeViewer(QGraphicsView):
             if not obj:
                 self._dirty_nodes.remove(node_key)
                 continue
-
             obj.ui().update()
             obj.ui().update_label()
+
             self._dirty_nodes.remove(node_key)
 
     def all_node_ports(self):
