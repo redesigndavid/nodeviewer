@@ -567,11 +567,10 @@ class FloatingTextBox(QGraphicsTextItem):
         self.setFont(font)
 
         self._rect = self.boundingRect()
-        self._rect = self.boundingRect()
-        self._rect.setX(self._rect.x() - 10)
-        self._rect.setY(self._rect.y() - 10)
-        self._rect.setHeight(self._rect.height() + 20)
-        self._rect.setWidth(self._rect.width() + 20)
+        self._rect.setX(self._rect.x() - 1)
+        self._rect.setY(self._rect.y() - 1)
+        self._rect.setHeight(self._rect.height() + 2)
+        self._rect.setWidth(self._rect.width() + 2)
 
     def keyPressEvent(self, event):
         super(FloatingTextBox, self).keyPressEvent(event)
