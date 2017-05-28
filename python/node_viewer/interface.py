@@ -3,6 +3,7 @@ from . import dag
 
 from PyQt4.QtGui import *
 from PyQt4.QtCore import *
+from PyQt4.QtSvg import QSvgGenerator
 
 # compatibility
 if not hasattr(Qt, 'MiddleButton'):
@@ -718,6 +719,18 @@ class NodeViewerLayout(QWidget):
     def key_action_reshape(self):
         print 'reshape'
 
+    def key_action_save(self):
+        self.gen = QSvgGenerator()
+        self.gen.setFileName('/var/tmp/test.svg')
+        self.gen.setSize(QSize(2000, 2000))
+        self.gen.setViewBox(QRect(0, 0, 2000, 2000))
+        self.gen.setTitle("Hello World")
+        self.gen.setDescription("Hello Description")
+        self.gen_painter = QPainter()
+        self.gen_painter.begin(self.gen)
+        self._node_viewer.scene.render(self.gen_painter)
+        self.gen_painter.end()
+
     def key_action_test(self):
         print 'asdf'
 
@@ -752,6 +765,8 @@ class NodeViewerLayout(QWidget):
             self.key_action_reshape()
         elif key == Qt.Key_I:
             self.key_action_toggle_info()
+        elif key == Qt.Key_S:
+            self.key_action_save()
         elif alt and ctrl:
             self.key_action_test()
 
